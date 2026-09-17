@@ -50,7 +50,7 @@ COD_REGIMEN_FIJO = {
 # Que va en "Importe del comprobante" (pos 29-44).
 #
 #   "neto"  = el neto de la factura. Es lo que Fiberhome viene declarando por SIAP:
-#             el certificado 0000-2026-000174 de MALDONADO imprime $1.150.435,54,
+#             el certificado 0000-2026-000174 de Proveedor A imprime $1.150.435,54,
 #             que es el neto del Excel y no el total con IVA ($1.392.027,00).
 #   "total" = neto x (1 + IVA). Es lo que escribe el ERP para el otro cliente
 #             (en su archivo, importe / base = 1,21 exacto).

@@ -3,7 +3,7 @@
 
 Los dos regimenes alcanzan a las empresas de limpieza de inmuebles, investigacion
 y/o seguridad y recoleccion de residuos domiciliarios. En el historico 2026 hay un
-solo proveedor alcanzado (MALDONADO CARLOS HUMBERTO), con 7 casos.
+solo proveedor alcanzado (Proveedor A), con 7 casos.
 
     retencion IVA  = neto * 10,5 %      RG 3164, SICORE impuesto 767 regimen 831
     retencion SUSS = neto *  6,0 %      RG 1556, SIRE F. 2004 regimen 748

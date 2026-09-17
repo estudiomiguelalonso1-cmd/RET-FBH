@@ -2,7 +2,7 @@
   "fuente": "https://servicioscf.afip.gob.ar/calc-rg830/default.aspx/conceptosalcliente",
   "descripcion": "Tabla completa de regimenes de retencion de Impuesto a las Ganancias (RG 830), obtenida del endpoint interno que usa el Simulador RG 830 publico de AFIP (https://servicioscf.afip.gob.ar/calc-rg830/). No es una API publica documentada: cachear y resincronizar periodicamente, nunca depender de ella en tiempo real como unica fuente.",
   "fecha_descarga": "2026-09-17",
-  "verificacion": "COD_REGIMEN 94 (Locaciones de Obra y/o Servicios), situacion Inscripto: alicuota 2%, monto no sujeto $67.170. Contrastado contra Retenciones_Ganancias_Practicadas_2026.xlsx fila ALONSO MIGUEL ANGEL: Monto Neto 1.794.000 - 67.170 = Base Imponible 1.726.830 (coincide exacto con el valor real de la planilla).",
+  "verificacion": "COD_REGIMEN 94 (Locaciones de Obra y/o Servicios), situacion Inscripto: alicuota 2%, monto no sujeto $67.170. Contrastado contra Retenciones_Ganancias_Practicadas_2026.xlsx fila Proveedor E: Monto Neto 1.794.000 - 67.170 = Base Imponible 1.726.830 (coincide exacto con el valor real de la planilla).",
   "campos": {
     "COD_REGIMEN": "Codigo de regimen SICORE (el mismo que aparece en la columna 'Regimen' de los Excel actuales de Fiberhome)",
     "CONCEPTO": "Descripcion del concepto sujeto a retencion",

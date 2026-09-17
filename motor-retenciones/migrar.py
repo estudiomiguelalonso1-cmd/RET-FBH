@@ -16,7 +16,7 @@ Lo que hace, en orden:
   6. concilia: los totales de la base tienen que dar iguales a los del Excel
 
 La migracion no corrige nada. Los errores detectados al validar el motor (fila 195
-de BAENA, filas 36 y 86 de SUSS) entran tal cual estan, con su observacion: la base
+de Proveedor B, filas 36 y 86 de SUSS) entran tal cual estan, con su observacion: la base
 tiene que reflejar lo que se presento, no lo que deberia haberse presentado.
 """
 import csv

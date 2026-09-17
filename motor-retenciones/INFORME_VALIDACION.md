@@ -2,6 +2,10 @@
 
 Fecha: 2026-09-17 · Fiberhome Argentina S.A.
 
+> Los proveedores figuran como "Proveedor A", "Proveedor B", etc. porque este
+> repositorio es público. La tabla de equivalencias está en `nombres_reales.csv`, que
+> queda fuera del repositorio. Los números de fila remiten a las planillas originales.
+
 ## Qué se hizo
 
 Se escribieron como código las reglas de cálculo de los cuatro impuestos que Fiberhome
@@ -48,7 +52,7 @@ Ganancias: **están mal por $4.030,20 cada una**.
 
 ### Los dos regímenes, identificados
 
-El proveedor alcanzado (MALDONADO CARLOS HUMBERTO) no es de la construcción sino de
+El proveedor alcanzado (Proveedor A) no es de la construcción sino de
 **limpieza de inmuebles**. La combinación 10,5 % de IVA + 6 % de SUSS es la firma de
 ese rubro:
 
@@ -93,18 +97,18 @@ simulador de AFIP en $28.339.928,75 → $8.686.688 y en $2.000.000 → $521.310.
 
 | Impuesto | Fila | Proveedor | Planilla | Motor | Diferencia |
 | --- | ---: | --- | ---: | ---: | --- |
-| Ganancias | 195 | BAENA GABRIEL | 13.865,80 | 12.656,60 | **1.209,20 de más** |
-| SUSS | 36 | MALDONADO CARLOS H. | 30.622,92 | 34.653,12 | 4.030,20 de menos |
-| SUSS | 86 | MALDONADO CARLOS H. | 30.622,92 | 34.653,12 | 4.030,20 de menos |
+| Ganancias | 195 | Proveedor B | 13.865,80 | 12.656,60 | **1.209,20 de más** |
+| SUSS | 36 | Proveedor A | 30.622,92 | 34.653,12 | 4.030,20 de menos |
+| SUSS | 86 | Proveedor A | 30.622,92 | 34.653,12 | 4.030,20 de menos |
 
-**Fila 195 — BAENA GABRIEL.** Se restó $6.710 de mínimo no imponible en lugar de
+**Fila 195 — Proveedor B.** Se restó $6.710 de mínimo no imponible en lugar de
 $67.170. Parece un error de tipeo; se retuvo $1.209,20 de más.
 
 **Filas 36 y 86 — SUSS.** Calcularon el 6 % sobre la base imponible de Ganancias
 ($510.382,07) en lugar del neto ($577.552,07). Desde la fila 89 en adelante el
 criterio es uniformemente el neto. **A confirmar cuál es el correcto.**
 
-**Sin practicar (no se cuentan como diferencia).** La factura de Cabify
+**Sin practicar (no se cuentan como diferencia).** La factura de Proveedor D
 00002-00003649, neto $47.885,56, quedó en cero en Ganancias y en IIBB a la vez.
 Habrían correspondido $957,71 y $95,77.
 
@@ -177,7 +181,7 @@ distintos: "importe del comprobante" (pos 29-44) y "base de cálculo" (pos 53-66
 base de cálculo es el neto en los dos casos y no está en discusión — de ahí sale el
 importe retenido.
 
-El otro campo difiere. El certificado 0000-2026-000174 de MALDONADO imprime
+El otro campo difiere. El certificado 0000-2026-000174 de Proveedor A imprime
 $1.150.435,54, que es el **neto** (la factura 00004-00000500 con IVA da $1.392.027,00).
 El ERP, en cambio, declara ahí el total: en su archivo, importe ÷ base = 1,21 exacto.
 
@@ -195,7 +199,7 @@ calcularlo como neto × 1,21 sólo funciona si la factura no tiene percepciones.
 
 12 filas del Excel juntan varias facturas bajo un solo neto, y 6 tienen en la columna
 de fecha un rango en vez de una fecha, por el mismo motivo. El caso extremo es la
-fila 106 (CABANELLAS, $28.499.928,75) con **diez** facturas:
+fila 106 (Proveedor C, $28.499.928,75) con **diez** facturas:
 `00001-5888/5893/5894/5895/5896/5897/5898/5899/5720/5889`.
 
 Así se emiten hoy desde el SIAP: **un solo certificado por grupo**, siempre que las
@@ -232,7 +236,7 @@ $586.056,72 del Excel. Toda la diferencia es la fila 20; el resto son centavos d
 redondeo a dos decimales (máximo 2 centavos por período), porque el Excel arrastra
 fracciones de centavo y el archivo declara dos decimales.
 
-**La única fila que no se puede exportar** es la 20: ALONSO MIGUEL ANGEL, enero 2026,
+**La única fila que no se puede exportar** es la 20: Proveedor E, enero 2026,
 neto $1.746.000, retención $34.920, certificado 2026-09 — **la celda del número de
 factura está vacía**. El certificado se emitió, pero el comprobante que lo originó no
 quedó registrado.
@@ -257,7 +261,7 @@ y `99,99` los 5 de la alícuota.
 retiene Fiberhome: la alícuota sale del padrón por sujeto, que es justamente lo que
 está pegado en la columna M del Excel. Confirma además el encaje que el 29 sea uno de
 los dos códigos (28 y 29) para los que el diseño admite alícuota cero — que es lo que
-pasa con los proveedores exentos, como ALONSO MIGUEL ANGEL.
+pasa con los proveedores exentos, como Proveedor E.
 
 **Situación IB del retenido, deducida del padrón.** El campo `Tipo-Contr_Insc` del
 padrón AGIP vale `D` o `C`, y según el diseño oficial del padrón por sujeto `D` es
@@ -301,4 +305,4 @@ sin una sola fila bloqueada**, y las validaciones de AGIP pasan en todas:
   nuevo aviso** (decisión del 17/09/2026). El motor ya calcula el SUSS correctamente;
   lo único que falta es la presentación, que se sigue haciendo a mano. Son 7
   retenciones al año, de un solo proveedor.
-- Corregir la fila 195 (BAENA) y definir qué pasó con los certificados 146-150.
+- Corregir la fila 195 (Proveedor B) y definir qué pasó con los certificados 146-150.
