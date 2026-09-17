@@ -1,0 +1,39 @@
+# === DATOS REALES — NO SUBIR ====================================================
+# Todo lo de abajo contiene CUIT, razones sociales, números de factura e importes
+# de Fiberhome y de sus proveedores. Nada de esto va al repositorio.
+
+# planillas de origen y certificados
+*.xlsx
+*.xls
+*.pdf
+
+# datos extraídos y base de datos
+motor-retenciones/historico.json
+motor-retenciones/retenciones.db
+motor-retenciones/*.db-journal
+motor-retenciones/*.db-wal
+motor-retenciones/*.db-shm
+
+# archivos de presentación generados (llevan CUIT de proveedores)
+motor-retenciones/SICORE_*.txt
+motor-retenciones/AGIP_*.txt
+"SICORE (3).txt"
+SICORE*.txt
+
+# datos maestros de proveedores
+motor-retenciones/proveedores_agip.csv
+motor-retenciones/diferencias.csv
+
+# === Python =====================================================================
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.env
+
+# === editores / sistema =========================================================
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+desktop.ini
