@@ -28,6 +28,12 @@ CREATE TABLE proveedores (
     situacion_iva       TEXT,          -- '1' resp. inscripto, '3' exento, '4' monotributo
     situacion_ib        TEXT,          -- '1' local, '2' convenio multilateral, '4' no inscripto
     nro_inscripcion_ib  TEXT,          -- lo exige e-ARCIBA; para convenio es el CUIT
+
+    -- Regimenes especiales que alcanzan al proveedor por su actividad. Hoy solo
+    -- aplican a empresas de limpieza de inmuebles, investigacion y/o seguridad.
+    retiene_iva_3164    INTEGER NOT NULL DEFAULT 0,   -- RG 3164, 10,5 % del neto
+    retiene_suss_1556   INTEGER NOT NULL DEFAULT 0,   -- RG 1556,  6,0 % del neto
+
     domicilio           TEXT,
     creado              TEXT DEFAULT (datetime('now')),
     CHECK (length(cuit) = 11),

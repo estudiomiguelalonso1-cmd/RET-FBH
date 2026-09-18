@@ -86,7 +86,13 @@ def cargar_proveedores(conn, H):
         if not f["cuit"]:
             continue
         r = prov.setdefault(f["cuit"], {"razon_social": None, "situacion_iva": None,
-                                        "situacion_ib": None, "nro_inscripcion_ib": None})
+                                        "situacion_ib": None, "nro_inscripcion_ib": None,
+                                        "iva_3164": 0, "suss_1556": 0})
+        # quien tuvo retencion de IVA o SUSS alguna vez, esta alcanzado por el regimen
+        if f.get("ret_iva_966"):
+            r["iva_3164"] = 1
+        if f.get("ret_suss"):
+            r["suss_1556"] = 1
         # se queda con el nombre mas largo, que suele ser el mas completo
         if f["razon_social"] and (not r["razon_social"]
                                   or len(f["razon_social"]) > len(r["razon_social"])):
@@ -112,10 +118,12 @@ def cargar_proveedores(conn, H):
 
     conn.executemany(
         "INSERT INTO proveedores (cuit, razon_social, tipo_persona, situacion_iva, "
-        "situacion_ib, nro_inscripcion_ib) VALUES (?,?,?,?,?,?)",
+        "situacion_ib, nro_inscripcion_ib, retiene_iva_3164, retiene_suss_1556) "
+        "VALUES (?,?,?,?,?,?,?,?)",
         [(cuit, r["razon_social"] or cuit,
           "H" if cuit[:2] in ("20", "23", "24", "27") else "J",
-          r["situacion_iva"], r["situacion_ib"], r["nro_inscripcion_ib"])
+          r["situacion_iva"], r["situacion_ib"], r["nro_inscripcion_ib"],
+          r["iva_3164"], r["suss_1556"])
          for cuit, r in prov.items()])
     return len(prov)
 
