@@ -46,6 +46,20 @@ def provisorio(f):
             "retiene_iva_3164": 0, "retiene_suss_1556": 0}
 
 
+def partidas_de(f, args, habitual):
+    """Arma las partidas del calculo: un item = una base + un regimen.
+
+    El regimen de cada item se toma de la pantalla (reg_0, reg_1...) y, si no
+    vino, del que mas usa ese proveedor.
+    """
+    items = f.get("items") or []
+    out = []
+    for n, it in enumerate(items):
+        cod = args.get(f"reg_{n}", type=int) or habitual
+        out.append({"base": it["subtotal"] or 0.0, "regimen": cod, "item": it, "n": n})
+    return out
+
+
 def plata(v):
     return f"{v:,.2f}".replace(",", "\x00").replace(".", ",").replace("\x00", ".")
 
@@ -120,17 +134,20 @@ def revisar(nombre):
         cuit = f["emisor"]["cuit"]
         proveedor = conn.execute(
             "SELECT * FROM proveedores WHERE cuit = ?", (cuit,)).fetchone()
-        regimen = request.args.get("regimen", type=int) or procesar.regimen_habitual(conn, cuit)
+        habitual = procesar.regimen_habitual(conn, cuit)
+        regimen = request.args.get("regimen", type=int) or habitual
         fecha_pago = request.args.get("fecha_pago") or calcular.date.today().isoformat()
         neto = request.args.get("neto", type=float) or f["importes"]["base_ganancias"]
         servicio_caba = request.args.get("servicio_caba") == "1"
 
+        partidas = partidas_de(f, request.args, regimen)
         calculo = None
-        if regimen and neto:
-            calculo = calcular.calcular(conn, cuit, neto, regimen, fecha_pago,
-                                        proveedor_provisorio=provisorio(f),
-                                        servicio_en_caba=servicio_caba,
-                                        neto_gravado=f["importes"]["neto_gravado"])
+        if neto and (partidas or regimen):
+            calculo = calcular.calcular(
+                conn, cuit, neto, regimen, fecha_pago,
+                proveedor_provisorio=provisorio(f), servicio_en_caba=servicio_caba,
+                neto_gravado=f["importes"]["neto_gravado"],
+                partidas=partidas or None)
         regimenes = conn.execute(
             "SELECT cod_regimen, concepto FROM regimenes_ganancias "
             "WHERE situacion = 'I' AND tipo_persona = '' ORDER BY cod_regimen").fetchall()
@@ -141,6 +158,7 @@ def revisar(nombre):
             "revisar.html", nombre=nombre, f=f, avisos=avisos, proveedor=proveedor,
             regimen=regimen, regimenes=regimenes, fecha_pago=fecha_pago, neto=neto,
             calculo=calculo, ya_cargada=ya_cargada, servicio_caba=servicio_caba,
+            partidas=partidas,
             jurisdiccion=calcular.jurisdiccion_de(f["emisor"]["domicilio"]))
     finally:
         conn.close()
@@ -155,16 +173,16 @@ def confirmar():
     fecha_pago = request.form["fecha_pago"]
     neto = float(request.form["neto"])
     servicio_caba = request.form.get("servicio_caba") == "1"
-    f["importes"]["neto_gravado"] = neto
+    partidas = partidas_de(f, request.form, regimen)
 
     conn = conectar()
     try:
         conn.execute("BEGIN")
         cambios, _ = procesar.sincronizar_proveedor(conn, f, True)
-        calculo = calcular.calcular(conn, f["emisor"]["cuit"], neto, regimen, fecha_pago,
-                                    proveedor_provisorio=provisorio(f),
-                                    servicio_en_caba=servicio_caba,
-                                    neto_gravado=f["importes"]["neto_gravado"])
+        calculo = calcular.calcular(
+            conn, f["emisor"]["cuit"], neto, regimen, fecha_pago,
+            proveedor_provisorio=provisorio(f), servicio_en_caba=servicio_caba,
+            neto_gravado=f["importes"]["neto_gravado"], partidas=partidas or None)
         cid, emitidos = procesar.guardar(conn, f, calculo, fecha_pago, servicio_caba)
         rutas = []
         for _, nro in emitidos:

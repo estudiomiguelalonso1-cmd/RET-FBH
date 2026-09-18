@@ -164,12 +164,77 @@ def alicuota_iibb(conn, cuit, fecha):
     return None
 
 
-def calcular(conn, cuit, neto, cod_regimen, fecha=None, antes_de=None,
-             proveedor_provisorio=None, servicio_en_caba=False, neto_gravado=None):
+def agrupar_por_regimen(partidas):
+    """[{'base':x,'regimen':94}, ...] -> {94: suma_de_bases}"""
+    out = {}
+    for x in partidas:
+        cod = x.get("regimen")
+        if cod is None:
+            continue
+        out[int(cod)] = out.get(int(cod), 0.0) + (x.get("base") or 0.0)
+    return out
+
+
+def retencion_ganancias(conn, cuit, p, neto, cod_regimen, fecha, periodo, antes_de):
+    """Una linea de retencion de Ganancias, o un texto de aviso si no se puede."""
+    exc = exclusion(conn, cuit, "ganancias", fecha)
+    reg = parametros_regimen(conn, cod_regimen, p["situacion_ganancias"] or "I",
+                             p["tipo_persona"] or "")
+    if exc is not None and exc["alcance"] == "total":
+        return {"impuesto": "Ganancias", "regimen": str(cod_regimen),
+                "concepto": reg["concepto"] if reg else None,
+                "base": redondear(neto), "alicuota": 0.0, "monto": 0.0,
+                "nota": ("no se retiene: certificado de exclusion vigente hasta "
+                         f"{exc['vigencia_hasta'] or 'sin vencimiento'}"
+                         + (f" ({exc['norma']})" if exc["norma"] else "")),
+                "detalle": None}
+    if reg is None:
+        return f"el regimen {cod_regimen} no esta en la tabla de AFIP"
+
+    # Metodo acumulativo de la RG 830: la retencion se calcula sobre todo lo
+    # pagado en el mes menos el minimo no imponible, y se le resta lo ya
+    # retenido. Importa cuando un pago no llego al minimo de retencion: esa
+    # base no se pierde, se arrastra al pago siguiente.
+    consumido = consumido_del_minimo(conn, cuit, periodo, cod_regimen, antes_de)
+    ya_retenido = retenido_en_el_mes(conn, cuit, periodo, cod_regimen,
+                                     "ganancias", antes_de)
+    saldo = max(0.0, reg["monto_no_sujeto"] - consumido)
+    base = neto - saldo
+    base_acumulada = consumido + neto - reg["monto_no_sujeto"]
+    if reg["alicuota"] == 0:
+        bruta = retencion_por_escala(max(0.0, base_acumulada)) - ya_retenido
+        alic = "s/escala"
+    else:
+        bruta = max(0.0, base_acumulada) * reg["alicuota"] - ya_retenido
+        alic = reg["alicuota"]
+    bruta = max(0.0, bruta)
+    if exc is not None and exc["porcentaje"] is not None:
+        bruta = max(0.0, base) * exc["porcentaje"]
+        alic = exc["porcentaje"]
+    monto = 0.0 if bruta < reg["monto_minimo"] else redondear(bruta)
+    nota = None
+    if bruta and monto == 0:
+        nota = (f"no llega al minimo de retencion (${reg['monto_minimo']:,.2f}): "
+                f"la base queda para el proximo pago del mes")
+    return {"impuesto": "Ganancias", "regimen": str(cod_regimen),
+            "concepto": reg["concepto"], "base": redondear(base), "alicuota": alic,
+            "monto": monto, "nota": nota,
+            "detalle": (f"minimo del regimen ${reg['monto_no_sujeto']:,.2f}, "
+                        f"ya consumido ${min(consumido, reg['monto_no_sujeto']):,.2f}, "
+                        f"queda ${saldo:,.2f}")}
+
+
+def calcular(conn, cuit, neto, cod_regimen=None, fecha=None, antes_de=None,
+             proveedor_provisorio=None, servicio_en_caba=False, neto_gravado=None,
+             partidas=None):
     """Calcula las cuatro retenciones de un pago.
 
     `proveedor_provisorio` permite cotizar una factura de un proveedor que todavia
     no esta dado de alta, con los datos leidos de la propia factura.
+
+    `partidas` es [{'base': importe, 'regimen': codigo}, ...] cuando la factura
+    tiene items de distinto regimen. Si no se pasa, se arma una sola partida con
+    `neto` y `cod_regimen`.
     """
     fecha = fecha or date.today().isoformat()
     periodo = fecha[:7]
@@ -182,55 +247,18 @@ def calcular(conn, cuit, neto, cod_regimen, fecha=None, antes_de=None,
         return resultado
     if proveedor(conn, cuit) is None:
         resultado["avisos"].append("proveedor nuevo: se da de alta al confirmar")
+    partidas = partidas or ([{"base": neto, "regimen": cod_regimen}] if cod_regimen else [])
 
     # --- Ganancias --------------------------------------------------------
-    exc_gan = exclusion(conn, cuit, "ganancias", fecha)
-    reg = parametros_regimen(conn, cod_regimen, p["situacion_ganancias"] or "I",
-                             p["tipo_persona"] or "")
-    if exc_gan is not None and exc_gan["alcance"] == "total":
-        resultado["retenciones"].append({
-            "impuesto": "Ganancias", "regimen": str(cod_regimen),
-            "concepto": reg["concepto"] if reg else None,
-            "base": redondear(neto), "alicuota": 0.0, "monto": 0.0,
-            "nota": f"no se retiene: certificado de exclusion vigente hasta "
-                    f"{exc_gan['vigencia_hasta'] or 'sin vencimiento'}"
-                    + (f" ({exc_gan['norma']})" if exc_gan["norma"] else ""),
-            "detalle": None})
-    elif reg is None:
-        resultado["avisos"].append(f"el regimen {cod_regimen} no esta en la tabla de AFIP")
-    else:
-        # Metodo acumulativo de la RG 830: la retencion se calcula sobre todo lo
-        # pagado en el mes menos el minimo no imponible, y se le resta lo ya
-        # retenido. Importa cuando un pago no llego al minimo de retencion: esa
-        # base no se pierde, se arrastra al pago siguiente.
-        consumido = consumido_del_minimo(conn, cuit, periodo, cod_regimen, antes_de)
-        ya_retenido = retenido_en_el_mes(conn, cuit, periodo, cod_regimen,
-                                         "ganancias", antes_de)
-        saldo = max(0.0, reg["monto_no_sujeto"] - consumido)
-        base = neto - saldo
-        base_acumulada = consumido + neto - reg["monto_no_sujeto"]
-        if reg["alicuota"] == 0:
-            bruta = retencion_por_escala(max(0.0, base_acumulada)) - ya_retenido
-            alic = "s/escala"
+    # Una factura puede traer items de distinto regimen: se agrupan por codigo y
+    # sale una retencion por cada uno, cada una con su propio minimo no imponible.
+    for cod, base_regimen in sorted(agrupar_por_regimen(partidas).items()):
+        linea = retencion_ganancias(conn, cuit, p, base_regimen, cod, fecha,
+                                    periodo, antes_de)
+        if isinstance(linea, str):
+            resultado["avisos"].append(linea)
         else:
-            bruta = max(0.0, base_acumulada) * reg["alicuota"] - ya_retenido
-            alic = reg["alicuota"]
-        bruta = max(0.0, bruta)
-        if exc_gan is not None and exc_gan["porcentaje"] is not None:
-            bruta = max(0.0, base) * exc_gan["porcentaje"]
-            alic = exc_gan["porcentaje"]
-        monto = 0.0 if bruta < reg["monto_minimo"] else redondear(bruta)
-        nota = None
-        if bruta and monto == 0:
-            nota = (f"no llega al minimo de retencion (${reg['monto_minimo']:,.2f}): "
-                    f"la base queda para el proximo pago del mes")
-        resultado["retenciones"].append({
-            "impuesto": "Ganancias", "regimen": str(cod_regimen),
-            "concepto": reg["concepto"], "base": redondear(base), "alicuota": alic,
-            "monto": monto, "nota": nota,
-            "detalle": (f"minimo del regimen ${reg['monto_no_sujeto']:,.2f}, "
-                        f"ya consumido ${min(consumido, reg['monto_no_sujeto']):,.2f}, "
-                        f"queda ${saldo:,.2f}")})
+            resultado["retenciones"].append(linea)
 
     # --- IIBB CABA --------------------------------------------------------
     # Fiberhome es de CABA: a los proveedores de CABA les corresponde retencion.

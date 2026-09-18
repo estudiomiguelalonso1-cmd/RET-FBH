@@ -113,6 +113,64 @@ def valor_multilinea(lineas, etiqueta, *, desde_y=None, hasta_y=None, maximo=3):
     return None
 
 
+# Columnas de la tabla de items, por el rango de x de cada encabezado. Son fijas
+# en la factura electronica de AFIP.
+COLUMNAS = [
+    ("codigo", 10, 52), ("descripcion", 53, 235), ("cantidad", 236, 285),
+    ("unidad", 286, 330), ("precio_unitario", 331, 386), ("bonificacion", 387, 420),
+    ("subtotal", 430, 481), ("alicuota_iva", 482, 515), ("subtotal_con_iva", 520, 585),
+]
+FIN_DE_ITEMS = ("importe neto gravado", "importe otros tributos", "cae n", "importe total")
+
+
+def columna_de(x0, x1):
+    centro = (x0 + x1) / 2
+    for nombre, a, b in COLUMNAS:
+        if a <= centro <= b:
+            return nombre
+    return None
+
+
+def items(lineas):
+    """Devuelve los renglones de la factura, uno por producto o servicio.
+
+    Una factura puede traer items de distinto regimen de retencion, asi que hay
+    que leerlos por separado y no quedarse solo con el total. La descripcion
+    puede venir partida en varios renglones debajo del primero.
+    """
+    cabecera = next((y for y, x0, x1, t in lineas
+                     if normalizar(t).startswith("producto / servicio")), None)
+    if cabecera is None:
+        return []
+    fin = next((y for y, x0, x1, t in lineas
+                if y > cabecera and normalizar(t).startswith(FIN_DE_ITEMS)), float("inf"))
+
+    # agrupo por renglon: un item nuevo empieza donde hay un valor en "subtotal"
+    filas = {}
+    for y, x0, x1, t in lineas:
+        if not (cabecera + 6 < y < fin):
+            continue
+        col = columna_de(x0, x1)
+        if col is None:
+            continue
+        filas.setdefault(round(y / 4), {}).setdefault(col, []).append((y, t))
+
+    out, actual = [], None
+    for _, celdas in sorted(filas.items()):
+        if "subtotal" in celdas:
+            actual = {nombre: None for nombre, _, _ in COLUMNAS}
+            for col, vals in celdas.items():
+                actual[col] = " ".join(t for _, t in sorted(vals))
+            for campo in ("cantidad", "precio_unitario", "bonificacion",
+                          "subtotal", "subtotal_con_iva"):
+                actual[campo] = numero(actual[campo])
+            out.append(actual)
+        elif actual is not None and "descripcion" in celdas:
+            extra = " ".join(t for _, t in sorted(celdas["descripcion"]))
+            actual["descripcion"] = f"{actual['descripcion'] or ''} {extra}".strip()
+    return out
+
+
 def leer(pdf):
     lineas = lineas_de(pdf)
     yr = y_receptor(lineas)
@@ -172,6 +230,7 @@ def leer(pdf):
         "periodo_desde": fecha_iso(valor(lineas, "Período Facturado Desde:")),
         "periodo_hasta": fecha_iso(valor(lineas, "Hasta:")),
         "emisor": emisor, "receptor": receptor, "importes": importes,
+        "items": items(lineas),
         "cae": cae.group(1) if cae else None,
     }
 
@@ -192,6 +251,13 @@ def controles(d):
             avisos.append(f"{campo} ilegible: {v!r}")
     if not d["punto_venta"] or not d["numero"]:
         avisos.append("no se pudo leer el punto de venta o el numero")
+    if not d["items"]:
+        avisos.append("no se pudieron leer los items de la factura")
+    else:
+        suma = sum(x["subtotal"] or 0 for x in d["items"])
+        if i["neto_gravado"] and abs(suma - i["base_ganancias"]) > 0.01:
+            avisos.append(f"los items suman {suma:,.2f} y el neto declarado es "
+                          f"{i['base_ganancias']:,.2f}")
     return avisos
 
 
@@ -214,6 +280,11 @@ def imprimir(d):
     print(f"   IVA               {i['iva']:>14,.2f}")
     print(f"   otros tributos    {(i['otros_tributos'] or 0):>14,.2f}")
     print(f"   TOTAL             {i['total']:>14,.2f}" if i["total"] else "")
+    if d["items"]:
+        print("ITEMS")
+        for x in d["items"]:
+            print(f"   {(x['codigo'] or ''):>8}  {(x['descripcion'] or '')[:52]:52} "
+                  f"{(x['subtotal'] or 0):>14,.2f}  IVA {x['alicuota_iva'] or '-'}")
     av = controles(d)
     print()
     print("  controles: ok" if not av else "  AVISOS:")

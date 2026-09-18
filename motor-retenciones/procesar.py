@@ -166,9 +166,12 @@ def main():
             print()
 
         fecha_pago = args.fecha_pago or calcular.date.today().isoformat()
+        partidas = [{"base": x["subtotal"] or 0.0, "regimen": regimen}
+                    for x in (f.get("items") or [])]
         calculo = calcular.calcular(conn, e["cuit"], f["importes"]["base_ganancias"],
                                     regimen, fecha_pago,
-                                    neto_gravado=f["importes"]["neto_gravado"])
+                                    neto_gravado=f["importes"]["neto_gravado"],
+                                    partidas=partidas or None)
         calcular.imprimir(calculo)
 
         if not args.confirmar:

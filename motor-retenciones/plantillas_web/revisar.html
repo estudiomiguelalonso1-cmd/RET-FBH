@@ -66,8 +66,9 @@
       <div class="cab"><h2>Retenciones a practicar</h2></div>
       <div class="cuerpo">
 
-        <form method="get" action="{{ url_for('revisar', nombre=nombre) }}">
+        <form method="get" action="{{ url_for('revisar', nombre=nombre) }}" id="formCalculo">
           <div class="campos">
+            {% if not partidas %}
             <div>
               <label for="regimen">Régimen de Ganancias</label>
               <select name="regimen" id="regimen" onchange="this.form.submit()">
@@ -79,17 +80,57 @@
                 {% endfor %}
               </select>
             </div>
+            {% else %}
+            <input type="hidden" name="regimen" value="{{ regimen or '' }}">
+            {% endif %}
             <div>
               <label for="fecha_pago">Fecha de pago</label>
               <input type="date" name="fecha_pago" id="fecha_pago" value="{{ fecha_pago }}"
                      onchange="this.form.submit()">
             </div>
             <div>
-              <label for="neto">Neto sujeto a retención</label>
+              <label for="neto">Base total</label>
               <input type="number" step="0.01" name="neto" id="neto" value="{{ neto }}"
                      onchange="this.form.submit()">
             </div>
           </div>
+
+          {% if partidas %}
+          <div style="margin-top:16px">
+            <label>Régimen de cada ítem</label>
+            <table style="border:1px solid var(--linea); border-radius:9px; overflow:hidden">
+              <thead><tr><th>Ítem</th><th class="num" style="width:120px">Importe</th>
+                         <th style="width:280px">Régimen</th></tr></thead>
+              <tbody>
+              {% for pt in partidas %}
+                <tr>
+                  <td>{{ pt.item.descripcion or pt.item.codigo or '(sin descripción)' }}
+                    {% if not pt.item.descripcion %}
+                      <span class="nota" style="display:block">
+                        Sin descripción: verificá la actividad en su constancia de inscripción.
+                      </span>
+                    {% endif %}
+                  </td>
+                  <td class="num">{{ (pt.item.subtotal or 0) | plata }}</td>
+                  <td>
+                    <select name="reg_{{ pt.n }}" onchange="this.form.submit()">
+                      <option value="">— elegir —</option>
+                      {% for r in regimenes %}
+                        <option value="{{ r.cod_regimen }}" {% if pt.regimen == r.cod_regimen %}selected{% endif %}>
+                          {{ r.cod_regimen }} · {{ r.concepto[:34] }}
+                        </option>
+                      {% endfor %}
+                    </select>
+                  </td>
+                </tr>
+              {% endfor %}
+              </tbody>
+            </table>
+            <p class="nota">Una factura puede traer ítems de distinto régimen. Sale una
+              retención por cada uno, con su propio mínimo no imponible.</p>
+          </div>
+          {% endif %}
+
           {% if jurisdiccion and jurisdiccion != 'CABA' %}
           <label style="display:flex; gap:9px; align-items:flex-start; margin-top:14px;
                         font-size:13.5px; color:var(--tinta-2); font-weight:450">
@@ -154,6 +195,9 @@
           <input type="hidden" name="fecha_pago" value="{{ fecha_pago }}">
           <input type="hidden" name="neto" value="{{ neto }}">
           {% if servicio_caba %}<input type="hidden" name="servicio_caba" value="1">{% endif %}
+          {% for pt in partidas %}
+            <input type="hidden" name="reg_{{ pt.n }}" value="{{ pt.regimen or '' }}">
+          {% endfor %}
           <button class="boton" type="submit">Confirmar y emitir certificados</button>
           <a class="boton secundario" href="{{ url_for('bandeja') }}">Cancelar</a>
         </form>
