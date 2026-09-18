@@ -69,7 +69,7 @@
     <table>
       <thead><tr>
         <th>Impuesto</th><th>Rég.</th><th class="num">Base</th>
-        <th class="num">Alíc.</th><th class="num">Monto</th><th>Certificado</th>
+        <th class="num">Alíc.</th><th class="num">Monto</th><th>Certificado</th><th></th>
       </tr></thead>
       <tbody>
       {% for r in retenciones %}
@@ -78,11 +78,44 @@
           <td><span class="chip">{{ r.regimen or '—' }}</span></td>
           <td class="num">{{ (r.base_imponible or 0) | plata }}</td>
           <td class="num">{% if r.alicuota %}{{ '%.2f'|format(r.alicuota * 100) }}%{% else %}—{% endif %}</td>
-          <td class="num"><strong>{{ r.monto | plata }}</strong></td>
-          <td>{{ r.nro_certificado or '—' }}</td>
+          <td class="num">
+            {% if r.estado == 'anulada' %}<s>{{ r.monto | plata }}</s>
+            {% else %}<strong>{{ r.monto | plata }}</strong>{% endif %}
+          </td>
+          <td>{{ r.nro_certificado or '—' }}
+            {% if r.estado == 'anulada' %}<span class="chip">anulada</span>{% endif %}
+          </td>
+          <td class="num" style="width:100px">
+            {% if r.estado == 'anulada' %}
+              <form method="post" action="{{ url_for('reactivar', rid=r.id) }}"
+                    style="display:inline">
+                <button class="boton secundario" type="submit"
+                        style="padding:4px 10px; font-size:12.5px">Reactivar</button>
+              </form>
+            {% elif r.monto %}
+              <button class="boton secundario" type="button"
+                      style="padding:4px 10px; font-size:12.5px"
+                      onclick="document.getElementById('anular{{ r.id }}').hidden = false; this.hidden = true">
+                Anular</button>
+            {% endif %}
+          </td>
         </tr>
+        {% if r.estado != 'anulada' and r.monto %}
+        <tr id="anular{{ r.id }}" hidden><td colspan="7" style="padding-top:0">
+          <form method="post" action="{{ url_for('anular', rid=r.id) }}"
+                style="display:flex; gap:8px; align-items:center">
+            <input name="motivo" placeholder="Motivo de la anulación" style="flex:1">
+            <button class="boton" type="submit"
+                    style="padding:6px 14px; font-size:13px">Confirmar anulación</button>
+          </form>
+          <p class="nota">Si es el último certificado de la serie se borra del todo y
+            el número queda libre para la próxima. Si hay certificados posteriores no se
+            puede borrar sin dejar un hueco: queda anulada y conserva el número. En los
+            dos casos deja de consumir el mínimo no imponible del mes.</p>
+        </td></tr>
+        {% endif %}
         {% if r.motivo %}
-        <tr><td colspan="6" style="padding-top:0">
+        <tr><td colspan="7" style="padding-top:0">
           <span class="nota">{{ r.impuesto }}: {{ r.motivo }}</span></td></tr>
         {% endif %}
       {% endfor %}
@@ -90,7 +123,8 @@
       <tfoot>
         <tr><td colspan="4">Total retenido</td>
             <td class="num destacado">
-              {{ retenciones | sum(attribute='monto') | plata }}</td><td></td></tr>
+              {{ retenciones | rejectattr('estado', 'equalto', 'anulada')
+                             | sum(attribute='monto') | plata }}</td><td colspan="2"></td></tr>
       </tfoot>
     </table>
   </div>

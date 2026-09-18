@@ -412,6 +412,97 @@ def comprobante(cid):
         conn.close()
 
 
+def es_el_ultimo_de_la_serie(conn, r):
+    """True si no hay ningun certificado posterior de ese impuesto y año."""
+    nro = (r["nro_certificado"] or "").strip()
+    if "-" not in nro:
+        return True
+    anio, sec = nro.split("-", 1)
+    if not sec.isdigit():
+        return False
+    posterior = conn.execute(
+        "SELECT 1 FROM retenciones WHERE impuesto = ? AND id <> ? "
+        "AND nro_certificado LIKE ? AND "
+        "CAST(substr(nro_certificado, length(?) + 2) AS INTEGER) > ? LIMIT 1",
+        (r["impuesto"], r["id"], f"{anio}-%", anio, int(sec))).fetchone()
+    return posterior is None
+
+
+def borrar_certificados(nro):
+    """Borra los PDF emitidos con ese numero de certificado."""
+    if not nro or not SALIDA.exists():
+        return
+    for pdf in SALIDA.glob(f"*_{nro.replace('/', '-')}_*.pdf"):
+        pdf.unlink(missing_ok=True)
+
+
+@app.route("/anular/<int:rid>", methods=["POST"])
+def anular(rid):
+    """Anula una retencion ya practicada.
+
+    Si es el ultimo certificado de su serie se borra del todo, y asi el numero
+    vuelve a estar disponible para la proxima. Si hay alguno posterior no se puede
+    borrar sin dejar un hueco en la numeracion: queda anulada, conservando su
+    numero.
+
+    En los dos casos la retencion deja de consumir el minimo no imponible del mes.
+    """
+    motivo = (request.form.get("motivo") or "").strip()
+    conn = conectar()
+    try:
+        r = conn.execute("SELECT * FROM retenciones WHERE id = ?", (rid,)).fetchone()
+        if r is None:
+            abort(404)
+        cid = r["comprobante_id"]
+        if es_el_ultimo_de_la_serie(conn, r):
+            borrar_certificados(r["nro_certificado"])
+            conn.execute("DELETE FROM retenciones WHERE id = ?", (rid,))
+        else:
+            conn.execute(
+                "UPDATE retenciones SET estado = 'anulada', monto = 0, motivo = ? "
+                "WHERE id = ?",
+                (f"anulada el {calcular.date.today().isoformat()}"
+                 + (f": {motivo}" if motivo else "")
+                 + f" (conserva el numero {r['nro_certificado']} porque hay "
+                   f"certificados posteriores)", rid))
+
+        # si al comprobante no le queda ninguna retencion, se va con la factura
+        quedan = conn.execute(
+            "SELECT COUNT(*) FROM retenciones WHERE comprobante_id = ?", (cid,)).fetchone()[0]
+        if not quedan:
+            origen = conn.execute(
+                "SELECT origen FROM comprobantes WHERE id = ?", (cid,)).fetchone()[0]
+            conn.execute("DELETE FROM comprobantes WHERE id = ?", (cid,))
+            conn.commit()
+            pdf = buscar_pdf(origen or "")
+            if pdf is not None and pdf.parent == PROCESADAS:
+                ENTRADA.mkdir(exist_ok=True)
+                shutil.move(str(pdf), str(ENTRADA / pdf.name))
+            return redirect(url_for("bandeja"))
+        conn.commit()
+    finally:
+        conn.close()
+    return redirect(url_for("comprobante", cid=cid))
+
+
+@app.route("/reactivar/<int:rid>", methods=["POST"])
+def reactivar(rid):
+    """Vuelve atras una anulacion hecha por error."""
+    conn = conectar()
+    try:
+        r = conn.execute("SELECT * FROM retenciones WHERE id = ?", (rid,)).fetchone()
+        if r is None:
+            abort(404)
+        estado = "practicada" if (r["monto"] or 0) > 0 else "no_practicada"
+        conn.execute("UPDATE retenciones SET estado = ?, motivo = NULL WHERE id = ?",
+                     (estado, rid))
+        conn.commit()
+        cid = r["comprobante_id"]
+    finally:
+        conn.close()
+    return redirect(url_for("comprobante", cid=cid))
+
+
 if __name__ == "__main__":
     ENTRADA.mkdir(exist_ok=True)
     PROCESADAS.mkdir(exist_ok=True)
