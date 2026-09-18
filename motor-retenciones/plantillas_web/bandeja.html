@@ -21,10 +21,7 @@
         <label class="soltar" id="zona" for="archivo">
           <input type="file" name="factura" id="archivo" accept="application/pdf" required>
           <div class="grande" id="rotulo">Arrastrá la factura acá o hacé clic para elegirla</div>
-          <div class="nota" style="margin:0">
-            Factura electrónica de AFIP en PDF. Se lee el texto del archivo y después
-            podés corregir lo que haga falta.
-          </div>
+          <div class="nota" style="margin:0">Factura electrónica de AFIP en PDF.</div>
         </label>
         <div style="margin-top:14px">
           <button class="boton" type="submit" id="enviar" disabled>Leer factura</button>
@@ -51,7 +48,7 @@
               {{ p.proveedor or p.nombre }}
               {% if p.ya_cargada %}<span class="chip">ya cargada</span>{% endif %}
               {% if not p.proveedor %}
-                <span class="nota" style="display:block">No se pudo leer: revisala igual</span>
+                <span class="nota" style="display:block">No se pudo leer</span>
               {% endif %}
             </td>
             <td style="white-space:nowrap">{{ p.comprobante or '—' }}</td>

@@ -14,20 +14,18 @@
 {% endfor %}
 {% if ya_cargada %}
   <div class="aviso"><span class="ico">!</span>
-    <span>Esta factura ya está cargada como
+    <span>Ya está cargada como
     <a href="{{ url_for('comprobante', cid=ya_cargada.id) }}">comprobante #{{ ya_cargada.id }}</a>.
-    Si confirmás otra vez, se duplica.</span></div>
+    Confirmar de nuevo la duplica.</span></div>
 {% endif %}
 {% if f.letra == 'M' or f.sujeta_a_retencion %}
   <div class="aviso"><span class="ico">!</span>
     <span>{% if f.letra == 'M' %}Comprobante clase M{% else %}Factura A con leyenda
-    "operación sujeta a retención"{% endif %}: por la RG 1575 hay que retener también
-    el IVA, y en Ganancias se aplica el mayor entre el régimen general y la alícuota
-    de esa resolución.</span></div>
+    "operación sujeta a retención"{% endif %}: se aplica la RG 1575.</span></div>
 {% endif %}
 {% if not proveedor %}
   <div class="aviso info"><span class="ico">i</span>
-    <span>No está dado de alta. Al confirmar se crea con los datos de esta factura.</span></div>
+    <span>Se da de alta al confirmar.</span></div>
 {% endif %}
 
 <form method="get" action="{{ url_for('revisar', nombre=nombre) }}" id="fc" name="fc">
@@ -46,9 +44,7 @@
   <div class="apilado">
 
     <div class="panel">
-      <div class="cab"><h2>Datos leídos</h2>
-        <span class="nota" style="margin-left:auto">Editables: corregí lo que salió mal</span>
-      </div>
+      <div class="cab"><h2>Datos leídos</h2></div>
       <div class="cuerpo">
         <div class="campos" style="grid-template-columns:1.6fr 1fr">
           <div>
@@ -133,7 +129,7 @@
                 <td>{{ pt.item.descripcion or pt.item.codigo or '(sin descripción)' }}
                   {% if not pt.item.descripcion %}
                     <span class="nota" style="display:block">
-                      Sin descripción: verificá la actividad en su constancia de inscripción.
+                      Sin descripción: mirá su constancia de inscripción.
                     </span>
                   {% endif %}
                 </td>
@@ -156,8 +152,6 @@
             {% endfor %}
             </tbody>
           </table>
-          <p class="nota">Una factura puede traer ítems de distinto régimen. Sale una
-            retención por cada uno, con su propio mínimo no imponible.</p>
         </div>
         {% endif %}
 
@@ -166,9 +160,9 @@
                       font-size:13.5px; color:var(--tinta-2); font-weight:450">
           <input type="checkbox" name="servicio_caba" value="1" style="width:auto; margin-top:3px"
                  {% if servicio_caba %}checked{% endif %} onchange="fc.submit()">
-          <span>El servicio o producto se prestó en CABA
+          <span>El servicio se prestó en CABA
             <span class="nota" style="display:block; margin:0">
-              El proveedor es de {{ jurisdiccion }}. Sin esto no corresponde retener IIBB.
+              El proveedor es de {{ jurisdiccion }}: sin esto no se retiene IIBB.
             </span>
           </span>
         </label>
@@ -213,8 +207,6 @@
       </table>
 
       <div class="cuerpo">
-        <p class="nota" style="margin-top:0">Destildá un impuesto para no retenerlo en
-          esta factura. Queda registrado igual, en cero y con el motivo.</p>
         {% for a in calculo.avisos %}
           <div class="aviso"><span class="ico">!</span><span>{{ a }}</span></div>
         {% endfor %}
@@ -260,7 +252,6 @@
   {% for c in apagados %}<input type="hidden" name="off_{{ c }}" value="1">{% endfor %}
   <button class="boton" type="submit">Confirmar y emitir certificados</button>
   <a class="boton secundario" href="{{ url_for('bandeja') }}">Cancelar</a>
-  <span class="nota" style="margin:0">Hasta que confirmes no se guarda nada.</span>
 </form>
 {% endif %}
 {% endblock %}

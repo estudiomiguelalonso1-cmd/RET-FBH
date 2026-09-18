@@ -239,9 +239,8 @@ def retencion_ganancias(conn, cuit, p, neto, cod_regimen, fecha, periodo, antes_
     return {"impuesto": "Ganancias", "regimen": str(cod_regimen),
             "concepto": reg["concepto"], "base": redondear(base), "alicuota": alic,
             "monto": monto, "nota": nota,
-            "detalle": (f"minimo del regimen ${reg['monto_no_sujeto']:,.2f}, "
-                        f"ya consumido ${min(consumido, reg['monto_no_sujeto']):,.2f}, "
-                        f"queda ${saldo:,.2f}")}
+            "detalle": (f"minimo no imponible: queda ${saldo:,.2f} "
+                        f"de ${reg['monto_no_sujeto']:,.2f}")}
 
 
 def calcular(conn, cuit, neto, cod_regimen=None, fecha=None, antes_de=None,
@@ -287,13 +286,12 @@ def calcular(conn, cuit, neto, cod_regimen=None, fecha=None, antes_de=None,
                          "base": redondear(base_regimen),
                          "alicuota": especial["ganancias"],
                          "monto": por_1575,
-                         "nota": (f"RG 1575 ({especial['etiqueta']}): "
-                                  f"{especial['ganancias']:.0%} sobre el total, que da mas "
-                                  f"que el regimen general"),
+                         "nota": (f"RG 1575: {especial['ganancias']:.0%} sobre el total, "
+                                  f"que da mas que el regimen general"),
                          "detalle": None}
             else:
                 linea = {**linea, "detalle": (linea["detalle"] or "")
-                         + f" | RG 1575 daria ${por_1575:,.2f}, se aplica el mayor"}
+                         + f" | por RG 1575 seria ${por_1575:,.2f}"}
         resultado["retenciones"].append(linea)
 
     # --- IIBB CABA --------------------------------------------------------
@@ -326,8 +324,6 @@ def calcular(conn, cuit, neto, cod_regimen=None, fecha=None, antes_de=None,
         # atras que eso, que ahi si es que falta actualizarlo.
         atraso = meses_de_atraso(pad["vigencia_desde"], periodo)
         detalle = f"padron de {pad['vigencia_desde'][:7]}"
-        if atraso == 1:
-            detalle += " (el ultimo publicado; AGIP va un mes atras)"
         resultado["retenciones"].append({
             "impuesto": "IIBB CABA", "regimen": "29", "concepto": "Padron de Regimenes Generales",
             "base": redondear(neto), "alicuota": alic,
@@ -364,8 +360,7 @@ def calcular(conn, cuit, neto, cod_regimen=None, fecha=None, antes_de=None,
         resultado["retenciones"].append({
             "impuesto": "IVA", "regimen": "831", "concepto": "RG 3164",
             "base": redondear(base_iva), "alicuota": ALICUOTA_IVA_3164,
-            "monto": monto_iva, "nota": nota_iva,
-            "detalle": "empresas de limpieza, investigacion y/o seguridad"})
+            "monto": monto_iva, "nota": nota_iva, "detalle": None})
     if "retiene_suss_2682" in p.keys() and p["retiene_suss_2682"]:
         obra = (p["tipo_obra"] if "tipo_obra" in p.keys() else None) or "arquitectura"
         alic = ALICUOTA_SUSS_2682[obra]
@@ -373,15 +368,14 @@ def calcular(conn, cuit, neto, cod_regimen=None, fecha=None, antes_de=None,
             "impuesto": "SUSS", "regimen": "construccion", "concepto": "RG 2682",
             "base": redondear(neto), "alicuota": alic,
             "monto": redondear(neto * alic),
-            "nota": "se presenta por SIRE (F. 2004), no por SICORE",
-            "detalle": f"contratista de la construccion, obras de {obra}"})
+            "nota": "se presenta por SIRE, no por SICORE",
+            "detalle": f"obras de {obra}"})
     if p["retiene_suss_1556"]:
         resultado["retenciones"].append({
             "impuesto": "SUSS", "regimen": "748", "concepto": "RG 1556",
             "base": redondear(neto), "alicuota": ALICUOTA_SUSS_1556,
             "monto": redondear(neto * ALICUOTA_SUSS_1556),
-            "nota": "se presenta por SIRE (F. 2004), no por SICORE",
-            "detalle": "empresas de limpieza de inmuebles"})
+            "nota": "se presenta por SIRE, no por SICORE", "detalle": None})
 
     resultado["total"] = redondear(sum(r["monto"] for r in resultado["retenciones"]))
     resultado["a_pagar"] = redondear(neto - resultado["total"])
