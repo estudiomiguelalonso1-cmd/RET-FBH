@@ -91,11 +91,11 @@
               <form method="post" action="{{ url_for('reactivar', rid=r.id) }}"
                     style="display:inline">
                 <button class="boton secundario" type="submit"
-                        style="padding:4px 10px; font-size:12.5px">Reactivar</button>
+                        style="padding:3px 9px; font-size:12px">Reactivar</button>
               </form>
             {% elif r.monto %}
               <button class="boton secundario" type="button"
-                      style="padding:4px 10px; font-size:12.5px"
+                      style="padding:3px 9px; font-size:12px"
                       onclick="document.getElementById('anular{{ r.id }}').hidden = false; this.hidden = true">
                 Anular</button>
             {% endif %}
