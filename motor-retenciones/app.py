@@ -66,10 +66,14 @@ def bandeja():
         pendientes = sorted(ENTRADA.glob("*.pdf")) if ENTRADA.exists() else []
         avisos = []
         ultimo = conn.execute(
-            "SELECT MAX(vigencia_hasta) FROM padron_iibb_caba").fetchone()[0]
+            "SELECT MAX(vigencia_desde) FROM padron_iibb_caba").fetchone()[0]
         hoy = calcular.date.today().isoformat()
-        if not ultimo or ultimo < hoy:
-            avisos.append(f"El padrón de AGIP más nuevo vence el {ultimo or '—'}. "
+        # AGIP publica con un mes de atraso: eso es lo normal y no se avisa.
+        if not ultimo:
+            avisos.append("No hay ningún padrón de AGIP cargado. "
+                          "Cargalo con: python padron_agip.py --descargar")
+        elif calcular.meses_de_atraso(ultimo, hoy[:7]) >= 2:
+            avisos.append(f"El padrón de AGIP más nuevo es de {ultimo[:7]}. "
                           f"Actualizalo con: python padron_agip.py --descargar")
         return render_template("bandeja.html", recientes=recientes,
                                pendientes=pendientes, avisos=avisos)

@@ -74,6 +74,13 @@ def _consultar(conn, cuit, fecha):
         (cuit, fecha)).fetchone()
 
 
+def meses_de_atraso(periodo_padron, periodo_pago):
+    """Cuantos meses atras quedo el padron respecto del pago."""
+    a1, m1 = int(periodo_padron[:4]), int(periodo_padron[5:7])
+    a2, m2 = int(periodo_pago[:4]), int(periodo_pago[5:7])
+    return (a2 - a1) * 12 + (m2 - m1)
+
+
 def alicuota_iibb(conn, cuit, fecha):
     """Alicuota de retencion del padron AGIP vigente a esa fecha.
 
@@ -156,14 +163,21 @@ def calcular(conn, cuit, neto, cod_regimen, fecha=None, antes_de=None, proveedor
                                    "hay que bajar el padron del mes")
     else:
         alic = pad["alic_retencion"]
-        vencido = pad["vigencia_hasta"] < fecha
+        # AGIP publica el padron con un mes de atraso, asi que usar el del mes
+        # anterior es lo normal y no amerita aviso. Solo se avisa si quedo mas
+        # atras que eso, que ahi si es que falta actualizarlo.
+        atraso = meses_de_atraso(pad["vigencia_desde"], periodo)
+        detalle = f"padron de {pad['vigencia_desde'][:7]}"
+        if atraso == 1:
+            detalle += " (el ultimo publicado; AGIP va un mes atras)"
         resultado["retenciones"].append({
             "impuesto": "IIBB CABA", "regimen": "29", "concepto": "Padron de Regimenes Generales",
             "base": redondear(neto), "alicuota": alic,
             "monto": redondear(neto * alic),
-            "nota": ("el padron esta vencido: vigente hasta "
-                     f"{pad['vigencia_hasta']}" if vencido else None),
-            "detalle": f"padron vigente {pad['vigencia_desde']} a {pad['vigencia_hasta']}"})
+            "nota": (f"el padron mas nuevo es de {pad['vigencia_desde'][:7]}, "
+                     f"{atraso} meses atras: conviene actualizarlo"
+                     if atraso >= 2 else None),
+            "detalle": detalle})
 
     # --- IVA y SUSS -------------------------------------------------------
     if p["retiene_iva_3164"]:
