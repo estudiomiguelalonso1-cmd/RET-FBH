@@ -42,6 +42,7 @@ def provisorio(f):
     return {"razon_social": f["emisor"]["razon_social"],
             "situacion_ganancias": "I",
             "tipo_persona": "H" if cuit[:2] in ("20", "23", "24", "27") else "J",
+            "jurisdiccion": calcular.jurisdiccion_de(f["emisor"]["domicilio"]),
             "retiene_iva_3164": 0, "retiene_suss_1556": 0}
 
 
@@ -122,11 +123,13 @@ def revisar(nombre):
         regimen = request.args.get("regimen", type=int) or procesar.regimen_habitual(conn, cuit)
         fecha_pago = request.args.get("fecha_pago") or calcular.date.today().isoformat()
         neto = request.args.get("neto", type=float) or f["importes"]["neto_gravado"]
+        servicio_caba = request.args.get("servicio_caba") == "1"
 
         calculo = None
         if regimen and neto:
             calculo = calcular.calcular(conn, cuit, neto, regimen, fecha_pago,
-                                        proveedor_provisorio=provisorio(f))
+                                        proveedor_provisorio=provisorio(f),
+                                        servicio_en_caba=servicio_caba)
         regimenes = conn.execute(
             "SELECT cod_regimen, concepto FROM regimenes_ganancias "
             "WHERE situacion = 'I' AND tipo_persona = '' ORDER BY cod_regimen").fetchall()
@@ -136,7 +139,8 @@ def revisar(nombre):
         return render_template(
             "revisar.html", nombre=nombre, f=f, avisos=avisos, proveedor=proveedor,
             regimen=regimen, regimenes=regimenes, fecha_pago=fecha_pago, neto=neto,
-            calculo=calculo, ya_cargada=ya_cargada)
+            calculo=calculo, ya_cargada=ya_cargada, servicio_caba=servicio_caba,
+            jurisdiccion=calcular.jurisdiccion_de(f["emisor"]["domicilio"]))
     finally:
         conn.close()
 
@@ -149,6 +153,7 @@ def confirmar():
     regimen = int(request.form["regimen"])
     fecha_pago = request.form["fecha_pago"]
     neto = float(request.form["neto"])
+    servicio_caba = request.form.get("servicio_caba") == "1"
     f["importes"]["neto_gravado"] = neto
 
     conn = conectar()
@@ -156,8 +161,9 @@ def confirmar():
         conn.execute("BEGIN")
         cambios, _ = procesar.sincronizar_proveedor(conn, f, True)
         calculo = calcular.calcular(conn, f["emisor"]["cuit"], neto, regimen, fecha_pago,
-                                    proveedor_provisorio=provisorio(f))
-        cid, emitidos = procesar.guardar(conn, f, calculo, fecha_pago)
+                                    proveedor_provisorio=provisorio(f),
+                                    servicio_en_caba=servicio_caba)
+        cid, emitidos = procesar.guardar(conn, f, calculo, fecha_pago, servicio_caba)
         rutas = []
         for _, nro in emitidos:
             filas = certificados.retenciones(conn, certificado=nro)

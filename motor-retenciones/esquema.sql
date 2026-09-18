@@ -34,6 +34,11 @@ CREATE TABLE proveedores (
     retiene_iva_3164    INTEGER NOT NULL DEFAULT 0,   -- RG 3164, 10,5 % del neto
     retiene_suss_1556   INTEGER NOT NULL DEFAULT 0,   -- RG 1556,  6,0 % del neto
 
+    -- Jurisdiccion del proveedor. Fiberhome es de CABA, asi que a los proveedores
+    -- de CABA les corresponde IIBB. A los de otra jurisdiccion solo si el servicio
+    -- o el producto se prestó en CABA, y eso se marca por comprobante.
+    jurisdiccion        TEXT,          -- CABA | PBA | OTRA
+
     domicilio           TEXT,
     creado              TEXT DEFAULT (datetime('now')),
     CHECK (length(cuit) = 11),
@@ -64,6 +69,10 @@ CREATE TABLE comprobantes (
 
     moneda           TEXT NOT NULL DEFAULT 'ARS',
     tipo_cambio      NUMERIC,   -- si moneda <> ARS
+
+    -- Para proveedores de fuera de CABA: si el servicio se presto en CABA igual
+    -- corresponde retener IIBB.
+    servicio_en_caba INTEGER NOT NULL DEFAULT 0,
 
     origen           TEXT,      -- de donde salio la fila, para auditar la migracion
     observacion      TEXT,
@@ -146,6 +155,29 @@ CREATE TABLE padron_iibb_caba (
     razon_social     TEXT,
     PRIMARY KEY (cuit, vigencia_desde)
 );
+
+
+-- ---------------------------------------------------------------- exclusiones
+-- Certificados de exclusion o de reduccion de alicuota. Tienen vigencia: hay que
+-- controlar la fecha en cada calculo y avisar cuando estan por vencer, porque
+-- seguir sin retener con un certificado vencido es tan error como retenerle a
+-- quien esta excluido.
+CREATE TABLE exclusiones (
+    id             INTEGER PRIMARY KEY AUTOINCREMENT,
+    cuit           TEXT NOT NULL REFERENCES proveedores(cuit),
+    impuesto       TEXT NOT NULL,          -- ganancias | iibb_caba | iva | suss
+    alcance        TEXT NOT NULL DEFAULT 'total',   -- total | parcial
+    porcentaje     NUMERIC,                -- alicuota reducida, si es parcial
+    vigencia_desde TEXT NOT NULL,
+    vigencia_hasta TEXT,                   -- NULL = sin vencimiento conocido
+    norma          TEXT,                   -- RG, resolucion o numero de certificado
+    observacion    TEXT,
+    creado         TEXT DEFAULT (datetime('now')),
+    CHECK (impuesto IN ('ganancias', 'iibb_caba', 'iva', 'suss')),
+    CHECK (alcance  IN ('total', 'parcial'))
+);
+
+CREATE INDEX ix_exclusiones_cuit ON exclusiones(cuit, impuesto);
 
 
 -- -------------------------------------------------------------------- vistas

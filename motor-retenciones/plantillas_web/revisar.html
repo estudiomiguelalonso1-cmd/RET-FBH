@@ -84,6 +84,18 @@
                      onchange="this.form.submit()">
             </div>
           </div>
+          {% if jurisdiccion and jurisdiccion != 'CABA' %}
+          <label style="display:flex; gap:9px; align-items:flex-start; margin-top:14px;
+                        font-size:13.5px; color:var(--tinta-2); font-weight:450">
+            <input type="checkbox" name="servicio_caba" value="1" style="width:auto; margin-top:3px"
+                   {% if servicio_caba %}checked{% endif %} onchange="this.form.submit()">
+            <span>El servicio o producto se prestó en CABA
+              <span class="nota" style="display:block; margin:0">
+                El proveedor es de {{ jurisdiccion }}. Sin esto no corresponde retener IIBB.
+              </span>
+            </span>
+          </label>
+          {% endif %}
         </form>
       </div>
 
@@ -135,6 +147,7 @@
           <input type="hidden" name="regimen" value="{{ regimen }}">
           <input type="hidden" name="fecha_pago" value="{{ fecha_pago }}">
           <input type="hidden" name="neto" value="{{ neto }}">
+          {% if servicio_caba %}<input type="hidden" name="servicio_caba" value="1">{% endif %}
           <button class="boton" type="submit">Confirmar y emitir certificados</button>
           <a class="boton secundario" href="{{ url_for('bandeja') }}">Cancelar</a>
         </form>

@@ -48,21 +48,24 @@ def sincronizar_proveedor(conn, f, escribir):
     cambios = []
     iibb = normalizar_iibb(e["ingresos_brutos"], cuit)
     sit_iva = "1" if "inscripto" in (e["condicion_iva"] or "").lower() else None
+    jur = calcular.jurisdiccion_de(e["domicilio"])
 
     if p is None:
         cambios.append("alta del proveedor")
         if escribir:
             conn.execute(
                 "INSERT INTO proveedores (cuit, razon_social, tipo_persona, "
-                "situacion_iva, nro_inscripcion_ib, domicilio) VALUES (?,?,?,?,?,?)",
+                "situacion_iva, nro_inscripcion_ib, domicilio, jurisdiccion) "
+                "VALUES (?,?,?,?,?,?,?)",
                 (cuit, e["razon_social"] or cuit,
                  "H" if cuit[:2] in ("20", "23", "24", "27") else "J",
-                 sit_iva, iibb, e["domicilio"]))
+                 sit_iva, iibb, e["domicilio"], jur))
         return cambios, True
 
     for columna, nuevo, etiqueta in [("domicilio", e["domicilio"], "domicilio"),
                                      ("nro_inscripcion_ib", iibb, "N de inscripcion en IIBB"),
-                                     ("situacion_iva", sit_iva, "situacion frente al IVA")]:
+                                     ("situacion_iva", sit_iva, "situacion frente al IVA"),
+                                     ("jurisdiccion", jur, "jurisdiccion")]:
         if nuevo and not p[columna]:
             cambios.append(f"completa el {etiqueta} desde la factura: {nuevo}")
             if escribir:
@@ -86,17 +89,18 @@ def siguiente_certificado(conn, impuesto, anio):
     return f"{anio}-{str(maximo + 1).zfill(ancho)}"
 
 
-def guardar(conn, f, calculo, fecha_pago):
+def guardar(conn, f, calculo, fecha_pago, servicio_en_caba=False):
     """Crea el comprobante y sus retenciones, y devuelve los certificados asignados."""
     e = f["emisor"]
     i = f["importes"]
     cur = conn.execute(
         "INSERT INTO comprobantes (cuit, tipo, letra, punto_venta, numero, "
-        "numero_crudo, fecha, neto, importe_iva, otros_conceptos, total, origen) "
-        "VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+        "numero_crudo, fecha, neto, importe_iva, otros_conceptos, total, "
+        "servicio_en_caba, origen) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
         (e["cuit"], "FC", f["letra"], f["punto_venta"], f["numero"],
          f"{f['punto_venta']}-{f['numero']}", f["fecha"], i["neto_gravado"],
-         i["iva"], i["otros_tributos"], i["total"], f["archivo"]))
+         i["iva"], i["otros_tributos"], i["total"],
+         1 if servicio_en_caba else 0, f["archivo"]))
     cid = cur.lastrowid
 
     clave = {"Ganancias": "ganancias", "IIBB CABA": "iibb_caba",

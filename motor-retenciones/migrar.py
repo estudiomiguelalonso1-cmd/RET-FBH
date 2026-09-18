@@ -118,12 +118,15 @@ def cargar_proveedores(conn, H):
 
     conn.executemany(
         "INSERT INTO proveedores (cuit, razon_social, tipo_persona, situacion_iva, "
-        "situacion_ib, nro_inscripcion_ib, retiene_iva_3164, retiene_suss_1556) "
-        "VALUES (?,?,?,?,?,?,?,?)",
+        "situacion_ib, nro_inscripcion_ib, retiene_iva_3164, retiene_suss_1556, "
+        "jurisdiccion) VALUES (?,?,?,?,?,?,?,?,?)",
         [(cuit, r["razon_social"] or cuit,
           "H" if cuit[:2] in ("20", "23", "24", "27") else "J",
           r["situacion_iva"], r["situacion_ib"], r["nro_inscripcion_ib"],
-          r["iva_3164"], r["suss_1556"])
+          r["iva_3164"], r["suss_1556"],
+          # El Excel no guarda domicilio. Los que estan en el padron de AGIP son
+          # contribuyentes de CABA; del resto no se sabe hasta leer una factura.
+          "CABA" if r["situacion_ib"] else None)
          for cuit, r in prov.items()])
     return len(prov)
 

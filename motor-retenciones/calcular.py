@@ -37,6 +37,31 @@ def conectar():
     return conn
 
 
+# Como se deduce la jurisdiccion del domicilio que trae la factura.
+CABA = ("ciudad de buenos aires", "capital federal", "c.a.b.a", "caba")
+PBA = ("provincia de buenos aires", "prov. de buenos aires", "bs as", "buenos aires")
+
+
+def jurisdiccion_de(domicilio):
+    """CABA / PBA / OTRA a partir del domicilio impreso en la factura."""
+    if not domicilio:
+        return None
+    d = domicilio.lower()
+    if any(x in d for x in CABA):
+        return "CABA"
+    if any(x in d for x in PBA):
+        return "PBA"
+    return "OTRA"
+
+
+def exclusion(conn, cuit, impuesto, fecha):
+    """Certificado de exclusion vigente a esa fecha, si lo hay."""
+    return conn.execute(
+        "SELECT * FROM exclusiones WHERE cuit = ? AND impuesto = ? "
+        "AND vigencia_desde <= ? AND (vigencia_hasta IS NULL OR vigencia_hasta >= ?) "
+        "ORDER BY vigencia_desde DESC LIMIT 1", (cuit, impuesto, fecha, fecha)).fetchone()
+
+
 def proveedor(conn, cuit):
     return conn.execute("SELECT * FROM proveedores WHERE cuit = ?", (cuit,)).fetchone()
 
@@ -111,7 +136,8 @@ def alicuota_iibb(conn, cuit, fecha):
     return None
 
 
-def calcular(conn, cuit, neto, cod_regimen, fecha=None, antes_de=None, proveedor_provisorio=None):
+def calcular(conn, cuit, neto, cod_regimen, fecha=None, antes_de=None,
+             proveedor_provisorio=None, servicio_en_caba=False):
     """Calcula las cuatro retenciones de un pago.
 
     `proveedor_provisorio` permite cotizar una factura de un proveedor que todavia
@@ -130,9 +156,19 @@ def calcular(conn, cuit, neto, cod_regimen, fecha=None, antes_de=None, proveedor
         resultado["avisos"].append("proveedor nuevo: se da de alta al confirmar")
 
     # --- Ganancias --------------------------------------------------------
+    exc_gan = exclusion(conn, cuit, "ganancias", fecha)
     reg = parametros_regimen(conn, cod_regimen, p["situacion_ganancias"] or "I",
                              p["tipo_persona"] or "")
-    if reg is None:
+    if exc_gan is not None and exc_gan["alcance"] == "total":
+        resultado["retenciones"].append({
+            "impuesto": "Ganancias", "regimen": str(cod_regimen),
+            "concepto": reg["concepto"] if reg else None,
+            "base": redondear(neto), "alicuota": 0.0, "monto": 0.0,
+            "nota": f"no se retiene: certificado de exclusion vigente hasta "
+                    f"{exc_gan['vigencia_hasta'] or 'sin vencimiento'}"
+                    + (f" ({exc_gan['norma']})" if exc_gan["norma"] else ""),
+            "detalle": None})
+    elif reg is None:
         resultado["avisos"].append(f"el regimen {cod_regimen} no esta en la tabla de AFIP")
     else:
         consumido = consumido_del_minimo(conn, cuit, periodo, cod_regimen, antes_de)
@@ -144,6 +180,9 @@ def calcular(conn, cuit, neto, cod_regimen, fecha=None, antes_de=None, proveedor
         else:
             bruta = max(0.0, base) * reg["alicuota"]
             alic = reg["alicuota"]
+        if exc_gan is not None and exc_gan["porcentaje"] is not None:
+            bruta = max(0.0, base) * exc_gan["porcentaje"]
+            alic = exc_gan["porcentaje"]
         monto = 0.0 if bruta < reg["monto_minimo"] else redondear(bruta)
         nota = None
         if bruta and monto == 0:
@@ -157,8 +196,26 @@ def calcular(conn, cuit, neto, cod_regimen, fecha=None, antes_de=None, proveedor
                         f"queda ${saldo:,.2f}")})
 
     # --- IIBB CABA --------------------------------------------------------
+    # Fiberhome es de CABA: a los proveedores de CABA les corresponde retencion.
+    # A los de otra jurisdiccion, solo si el servicio se presto en CABA.
+    jur = p["jurisdiccion"] if "jurisdiccion" in p.keys() else None
+    exc_iibb = exclusion(conn, cuit, "iibb_caba", fecha)
     pad = alicuota_iibb(conn, cuit, fecha)
-    if pad is None:
+    if jur and jur != "CABA" and not servicio_en_caba:
+        resultado["retenciones"].append({
+            "impuesto": "IIBB CABA", "regimen": "29", "concepto": None,
+            "base": redondear(neto), "alicuota": 0.0, "monto": 0.0,
+            "nota": f"no se retiene: el proveedor es de {jur} y no se indico que el "
+                    f"servicio se haya prestado en CABA",
+            "detalle": None})
+    elif exc_iibb is not None and exc_iibb["alcance"] == "total":
+        resultado["retenciones"].append({
+            "impuesto": "IIBB CABA", "regimen": "29", "concepto": None,
+            "base": redondear(neto), "alicuota": 0.0, "monto": 0.0,
+            "nota": f"no se retiene: certificado de exclusion vigente hasta "
+                    f"{exc_iibb['vigencia_hasta'] or 'sin vencimiento'}",
+            "detalle": None})
+    elif pad is None:
         resultado["avisos"].append("no hay padron de AGIP para este CUIT: "
                                    "hay que bajar el padron del mes")
     else:
