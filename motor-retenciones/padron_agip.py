@@ -123,11 +123,12 @@ def cargar(txt, conn, todos=False):
             continue
         filas.append((p[3], iso(p[1]), iso(p[2]), iso(p[0]), p[4],
                       float(p[7].replace(",", ".")) / 100,
-                      float(p[8].replace(",", ".")) / 100, p[11].strip()))
+                      float(p[8].replace(",", ".")) / 100, p[11].strip(),
+                      ";".join(p).strip()))
     conn.executemany(
         "INSERT OR REPLACE INTO padron_iibb_caba (cuit, vigencia_desde, vigencia_hasta, "
-        "publicacion, tipo_contr, alic_percepcion, alic_retencion, razon_social) "
-        "VALUES (?,?,?,?,?,?,?,?)", filas)
+        "publicacion, tipo_contr, alic_percepcion, alic_retencion, razon_social, "
+        "renglon) VALUES (?,?,?,?,?,?,?,?,?)", filas)
     conn.commit()
     return leidos, len(filas)
 

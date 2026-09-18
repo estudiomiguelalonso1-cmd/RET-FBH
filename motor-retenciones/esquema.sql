@@ -156,6 +156,9 @@ CREATE TABLE padron_iibb_caba (
     alic_percepcion  NUMERIC,
     alic_retencion   NUMERIC,
     razon_social     TEXT,
+    -- el renglon tal cual viene del padron, para poder mostrarlo como respaldo
+    -- de la alicuota que se aplico
+    renglon          TEXT,
     PRIMARY KEY (cuit, vigencia_desde)
 );
 

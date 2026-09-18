@@ -142,7 +142,7 @@ def consumido_del_minimo(conn, cuit, periodo, regimen, antes_de=None):
 
 def _consultar(conn, cuit, fecha):
     return conn.execute(
-        "SELECT alic_retencion, vigencia_desde, vigencia_hasta FROM padron_iibb_caba "
+        "SELECT * FROM padron_iibb_caba "
         "WHERE cuit = ? AND vigencia_desde <= ? ORDER BY vigencia_desde DESC LIMIT 1",
         (cuit, fecha)).fetchone()
 
@@ -193,10 +193,11 @@ def alicuota_iibb(conn, cuit, fecha):
         conn.execute(
             "INSERT OR REPLACE INTO padron_iibb_caba (cuit, vigencia_desde, "
             "vigencia_hasta, publicacion, tipo_contr, alic_percepcion, "
-            "alic_retencion, razon_social) VALUES (?,?,?,?,?,?,?,?)",
+            "alic_retencion, razon_social, renglon) VALUES (?,?,?,?,?,?,?,?,?)",
             (p[3], padron_agip.iso(p[1]), padron_agip.iso(p[2]),
              padron_agip.iso(p[0]), p[4], float(p[7].replace(",", ".")) / 100,
-             float(p[8].replace(",", ".")) / 100, p[11].strip()))
+             float(p[8].replace(",", ".")) / 100, p[11].strip(),
+             ";".join(p).strip()))
         conn.commit()
         return _consultar(conn, cuit, fecha)
     return None
@@ -372,6 +373,8 @@ def calcular(conn, cuit, neto, cod_regimen=None, fecha=None, antes_de=None,
         # atras que eso, que ahi si es que falta actualizarlo.
         atraso = meses_de_atraso(pad["vigencia_desde"], periodo)
         detalle = f"padron de {pad['vigencia_desde'][:7]}"
+        # se adjunta el renglon del padron para poder verificar la alicuota
+        claves = pad.keys()
         resultado["retenciones"].append({
             "impuesto": "IIBB CABA", "regimen": "29", "concepto": "Padron de Regimenes Generales",
             "base": redondear(neto), "alicuota": alic,
@@ -379,7 +382,17 @@ def calcular(conn, cuit, neto, cod_regimen=None, fecha=None, antes_de=None,
             "nota": (f"el padron mas nuevo es de {pad['vigencia_desde'][:7]}, "
                      f"{atraso} meses atras: conviene actualizarlo"
                      if atraso >= 2 else None),
-            "detalle": detalle})
+            "detalle": detalle,
+            "padron": {
+                "renglon": pad["renglon"] if "renglon" in claves else None,
+                "vigencia_desde": pad["vigencia_desde"],
+                "vigencia_hasta": pad["vigencia_hasta"],
+                "publicacion": pad["publicacion"] if "publicacion" in claves else None,
+                "tipo_contr": pad["tipo_contr"] if "tipo_contr" in claves else None,
+                "alic_percepcion": pad["alic_percepcion"] if "alic_percepcion" in claves else None,
+                "alic_retencion": pad["alic_retencion"],
+                "razon_social": pad["razon_social"] if "razon_social" in claves else None,
+            }})
 
     # --- IVA y SUSS -------------------------------------------------------
     if especial and iva_facturado:

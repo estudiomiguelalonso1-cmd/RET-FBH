@@ -120,6 +120,26 @@ tfoot tr:first-child td{border-top:2px solid var(--tinta-2)}
 .desglose .fuerte dt,.desglose .fuerte dd{font-weight:650; color:var(--tinta)}
 .desglose .fuerte{border-top:1px solid var(--linea-fuerte); padding-top:4px; margin-top:2px}
 
+.padron{
+  border:1px solid var(--linea); border-radius:10px; background:#fafbfd;
+  padding:12px 14px; margin-top:12px; font-size:13px;
+}
+.padron h3{
+  margin:0 0 9px; font-size:12px; font-weight:620; color:var(--tenue);
+  text-transform:uppercase; letter-spacing:.05em;
+}
+.padron .renglon{
+  font-family:ui-monospace,Menlo,Consolas,monospace; font-size:12px;
+  background:#fff; border:1px solid var(--linea); border-radius:7px;
+  padding:8px 10px; overflow-x:auto; white-space:nowrap; color:var(--tinta-2);
+}
+.padron .campos-padron{
+  display:grid; grid-template-columns:repeat(auto-fit,minmax(130px,1fr));
+  gap:8px 16px; margin-top:10px;
+}
+.padron .campos-padron span{display:block; color:var(--tenue); font-size:11.5px}
+.padron .campos-padron strong{font-weight:600; font-size:13px}
+
 /* ---------- lista de datos ---------- */
 .dato{display:grid; grid-template-columns:132px minmax(0,1fr); gap:9px 16px; margin:0; font-size:13.8px}
 .dato dt{color:var(--tenue)}

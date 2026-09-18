@@ -71,11 +71,11 @@ def cargar_normativas(conn, H):
         vistos[(p["cuit"], iso(p["desde"]))] = (
             p["cuit"], iso(p["desde"]), iso(p["hasta"]), iso(p["publicacion"]),
             p["tipo_contr"], p["alic_percepcion"], p["alic_retencion"],
-            p["razon_social"])
+            p["razon_social"], f["padron_crudo"])
     conn.executemany(
         "INSERT INTO padron_iibb_caba (cuit, vigencia_desde, vigencia_hasta, "
-        "publicacion, tipo_contr, alic_percepcion, alic_retencion, razon_social) "
-        "VALUES (?,?,?,?,?,?,?,?)", list(vistos.values()))
+        "publicacion, tipo_contr, alic_percepcion, alic_retencion, razon_social, "
+        "renglon) VALUES (?,?,?,?,?,?,?,?,?)", list(vistos.values()))
     return len(afip["regimenes"]), len(vistos)
 
 

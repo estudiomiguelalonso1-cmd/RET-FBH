@@ -220,6 +220,27 @@
 
       <div class="cuerpo">
         {% for r in calculo.retenciones %}
+          {% if r.padron %}
+          <div class="padron">
+            <h3>Padrón de AGIP · así verificás la alícuota</h3>
+            {% if r.padron.renglon %}
+              <div class="renglon">{{ r.padron.renglon }}</div>
+            {% endif %}
+            <div class="campos-padron">
+              <div><span>Vigencia</span><strong>{{ r.padron.vigencia_desde }} a {{ r.padron.vigencia_hasta }}</strong></div>
+              <div><span>Tipo</span><strong>{{ r.padron.tipo_contr }} ·
+                {{ 'Local CABA' if r.padron.tipo_contr == 'D' else 'Convenio Multilateral' }}</strong></div>
+              <div><span>Alíc. retención</span><strong>{{ '%.2f'|format((r.padron.alic_retencion or 0) * 100) }}%</strong></div>
+              <div><span>Alíc. percepción</span><strong>{{ '%.2f'|format((r.padron.alic_percepcion or 0) * 100) }}%</strong></div>
+              {% if r.padron.publicacion %}
+                <div><span>Publicado</span><strong>{{ r.padron.publicacion }}</strong></div>
+              {% endif %}
+            </div>
+            {% if r.padron.razon_social %}
+              <p class="nota">Razón social en el padrón: {{ r.padron.razon_social }}</p>
+            {% endif %}
+          </div>
+          {% endif %}
           {% if r.desglose %}
           <div class="desglose">
             <h3>{{ r.impuesto }} régimen {{ r.regimen }} · cómo se llegó a ese importe</h3>
