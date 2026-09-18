@@ -229,6 +229,7 @@ def leer(pdf):
         "fecha": fecha_iso(valor(lineas, "Fecha de Emisión:")),
         "periodo_desde": fecha_iso(valor(lineas, "Período Facturado Desde:")),
         "periodo_hasta": fecha_iso(valor(lineas, "Hasta:")),
+        "sujeta_a_retencion": leyenda,
         "emisor": emisor, "receptor": receptor, "importes": importes,
         "items": items(lineas),
         "cae": cae.group(1) if cae else None,
@@ -264,7 +265,8 @@ def controles(d):
 def imprimir(d):
     e, r, i = d["emisor"], d["receptor"], d["importes"]
     print(f"{d['tipo']} {d['letra']} (cod. {d['codigo']})  "
-          f"{d['punto_venta']}-{d['numero']}   {d['fecha']}")
+          f"{d['punto_venta']}-{d['numero']}   {d['fecha']}"
+          + ("   [OPERACION SUJETA A RETENCION]" if d["sujeta_a_retencion"] else ""))
     print()
     print("EMISOR")
     print(f"   razon social      {e['razon_social']}")

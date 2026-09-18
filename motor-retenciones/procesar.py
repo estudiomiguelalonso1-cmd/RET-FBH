@@ -171,7 +171,9 @@ def main():
         calculo = calcular.calcular(conn, e["cuit"], f["importes"]["base_ganancias"],
                                     regimen, fecha_pago,
                                     neto_gravado=f["importes"]["neto_gravado"],
-                                    partidas=partidas or None)
+                                    partidas=partidas or None, letra=f["letra"],
+                                    sujeta_a_retencion=f["sujeta_a_retencion"],
+                                    iva_facturado=f["importes"]["iva"])
         calcular.imprimir(calculo)
 
         if not args.confirmar:

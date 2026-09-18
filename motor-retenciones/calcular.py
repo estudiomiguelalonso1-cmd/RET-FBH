@@ -29,6 +29,26 @@ ALICUOTA_SUSS_1556 = 0.06
 # sujetas. Es un importe fijo de la norma: revisar si AFIP lo actualiza.
 MINIMO_IVA_3164 = 17_000
 
+# RG 2682: retencion de seguridad social a contratistas de la construccion.
+ALICUOTA_SUSS_2682 = {"ingenieria": 0.012, "arquitectura": 0.025}
+
+# RG 1575: comprobantes clase M y clase A con la leyenda "operacion sujeta a
+# retencion". No reemplazan al regimen general: el art. 12 manda aplicar el mayor
+# de los dos importes.
+RG1575 = {
+    "M":       {"iva": 1.00, "ganancias": 0.06, "etiqueta": "comprobante clase M"},
+    "leyenda": {"iva": 0.50, "ganancias": 0.03,
+                "etiqueta": 'comprobante A con leyenda "operacion sujeta a retencion"'},
+}
+
+
+def caso_rg1575(letra, sujeta_a_retencion):
+    if (letra or "").upper() == "M":
+        return RG1575["M"]
+    if sujeta_a_retencion:
+        return RG1575["leyenda"]
+    return None
+
 
 def redondear(v):
     return float(Decimal(str(v)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP))
@@ -226,7 +246,7 @@ def retencion_ganancias(conn, cuit, p, neto, cod_regimen, fecha, periodo, antes_
 
 def calcular(conn, cuit, neto, cod_regimen=None, fecha=None, antes_de=None,
              proveedor_provisorio=None, servicio_en_caba=False, neto_gravado=None,
-             partidas=None):
+             partidas=None, letra=None, sujeta_a_retencion=False, iva_facturado=None):
     """Calcula las cuatro retenciones de un pago.
 
     `proveedor_provisorio` permite cotizar una factura de un proveedor que todavia
@@ -252,13 +272,29 @@ def calcular(conn, cuit, neto, cod_regimen=None, fecha=None, antes_de=None,
     # --- Ganancias --------------------------------------------------------
     # Una factura puede traer items de distinto regimen: se agrupan por codigo y
     # sale una retencion por cada uno, cada una con su propio minimo no imponible.
+    especial = caso_rg1575(letra, sujeta_a_retencion)
     for cod, base_regimen in sorted(agrupar_por_regimen(partidas).items()):
         linea = retencion_ganancias(conn, cuit, p, base_regimen, cod, fecha,
                                     periodo, antes_de)
         if isinstance(linea, str):
             resultado["avisos"].append(linea)
-        else:
-            resultado["retenciones"].append(linea)
+            continue
+        if especial:
+            # art. 12 de la RG 1575: corresponde el mayor de los dos importes
+            por_1575 = redondear(base_regimen * especial["ganancias"])
+            if por_1575 > linea["monto"]:
+                linea = {**linea,
+                         "base": redondear(base_regimen),
+                         "alicuota": especial["ganancias"],
+                         "monto": por_1575,
+                         "nota": (f"RG 1575 ({especial['etiqueta']}): "
+                                  f"{especial['ganancias']:.0%} sobre el total, que da mas "
+                                  f"que el regimen general"),
+                         "detalle": None}
+            else:
+                linea = {**linea, "detalle": (linea["detalle"] or "")
+                         + f" | RG 1575 daria ${por_1575:,.2f}, se aplica el mayor"}
+        resultado["retenciones"].append(linea)
 
     # --- IIBB CABA --------------------------------------------------------
     # Fiberhome es de CABA: a los proveedores de CABA les corresponde retencion.
@@ -302,7 +338,15 @@ def calcular(conn, cuit, neto, cod_regimen=None, fecha=None, antes_de=None,
             "detalle": detalle})
 
     # --- IVA y SUSS -------------------------------------------------------
-    if p["retiene_iva_3164"]:
+    if especial and iva_facturado:
+        monto_1575 = redondear(iva_facturado * especial["iva"])
+        resultado["retenciones"].append({
+            "impuesto": "IVA", "regimen": "RG 1575", "concepto": especial["etiqueta"],
+            "base": redondear(iva_facturado), "alicuota": especial["iva"],
+            "monto": monto_1575,
+            "nota": f"{especial['iva']:.0%} del IVA facturado, por la RG 1575",
+            "detalle": especial["etiqueta"]})
+    elif p["retiene_iva_3164"]:
         # La base del IVA es solo el precio neto gravado: lo no gravado y lo
         # exento no generan debito fiscal, asi que no hay nada que retener.
         base_iva = neto_gravado if neto_gravado is not None else neto
@@ -322,6 +366,15 @@ def calcular(conn, cuit, neto, cod_regimen=None, fecha=None, antes_de=None,
             "base": redondear(base_iva), "alicuota": ALICUOTA_IVA_3164,
             "monto": monto_iva, "nota": nota_iva,
             "detalle": "empresas de limpieza, investigacion y/o seguridad"})
+    if "retiene_suss_2682" in p.keys() and p["retiene_suss_2682"]:
+        obra = (p["tipo_obra"] if "tipo_obra" in p.keys() else None) or "arquitectura"
+        alic = ALICUOTA_SUSS_2682[obra]
+        resultado["retenciones"].append({
+            "impuesto": "SUSS", "regimen": "construccion", "concepto": "RG 2682",
+            "base": redondear(neto), "alicuota": alic,
+            "monto": redondear(neto * alic),
+            "nota": "se presenta por SIRE (F. 2004), no por SICORE",
+            "detalle": f"contratista de la construccion, obras de {obra}"})
     if p["retiene_suss_1556"]:
         resultado["retenciones"].append({
             "impuesto": "SUSS", "regimen": "748", "concepto": "RG 1556",

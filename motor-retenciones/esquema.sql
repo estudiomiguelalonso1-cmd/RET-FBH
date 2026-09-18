@@ -33,6 +33,8 @@ CREATE TABLE proveedores (
     -- aplican a empresas de limpieza de inmuebles, investigacion y/o seguridad.
     retiene_iva_3164    INTEGER NOT NULL DEFAULT 0,   -- RG 3164, 10,5 % del neto
     retiene_suss_1556   INTEGER NOT NULL DEFAULT 0,   -- RG 1556,  6,0 % del neto
+    retiene_suss_2682   INTEGER NOT NULL DEFAULT 0,   -- RG 2682, construccion
+    tipo_obra           TEXT,                          -- ingenieria | arquitectura
 
     -- Jurisdiccion del proveedor. Fiberhome es de CABA, asi que a los proveedores
     -- de CABA les corresponde IIBB. A los de otra jurisdiccion solo si el servicio
@@ -44,7 +46,8 @@ CREATE TABLE proveedores (
     CHECK (length(cuit) = 11),
     CHECK (situacion_ganancias IN ('I', 'NI')),
     CHECK (situacion_iva IS NULL OR situacion_iva IN ('1', '3', '4')),
-    CHECK (situacion_ib  IS NULL OR situacion_ib  IN ('1', '2', '4', '5'))
+    CHECK (situacion_ib  IS NULL OR situacion_ib  IN ('1', '2', '4', '5')),
+    CHECK (tipo_obra IS NULL OR tipo_obra IN ('ingenieria', 'arquitectura'))
 );
 
 

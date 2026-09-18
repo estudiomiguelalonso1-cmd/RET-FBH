@@ -43,7 +43,8 @@ def provisorio(f):
             "situacion_ganancias": "I",
             "tipo_persona": "H" if cuit[:2] in ("20", "23", "24", "27") else "J",
             "jurisdiccion": calcular.jurisdiccion_de(f["emisor"]["domicilio"]),
-            "retiene_iva_3164": 0, "retiene_suss_1556": 0}
+            "retiene_iva_3164": 0, "retiene_suss_1556": 0,
+            "retiene_suss_2682": 0, "tipo_obra": None}
 
 
 def partidas_de(f, args, habitual):
@@ -147,7 +148,9 @@ def revisar(nombre):
                 conn, cuit, neto, regimen, fecha_pago,
                 proveedor_provisorio=provisorio(f), servicio_en_caba=servicio_caba,
                 neto_gravado=f["importes"]["neto_gravado"],
-                partidas=partidas or None)
+                partidas=partidas or None, letra=f["letra"],
+                sujeta_a_retencion=f["sujeta_a_retencion"],
+                iva_facturado=f["importes"]["iva"])
         regimenes = conn.execute(
             "SELECT cod_regimen, concepto FROM regimenes_ganancias "
             "WHERE situacion = 'I' AND tipo_persona = '' ORDER BY cod_regimen").fetchall()
@@ -182,7 +185,9 @@ def confirmar():
         calculo = calcular.calcular(
             conn, f["emisor"]["cuit"], neto, regimen, fecha_pago,
             proveedor_provisorio=provisorio(f), servicio_en_caba=servicio_caba,
-            neto_gravado=f["importes"]["neto_gravado"], partidas=partidas or None)
+            neto_gravado=f["importes"]["neto_gravado"], partidas=partidas or None,
+            letra=f["letra"], sujeta_a_retencion=f["sujeta_a_retencion"],
+            iva_facturado=f["importes"]["iva"])
         cid, emitidos = procesar.guardar(conn, f, calculo, fecha_pago, servicio_caba)
         rutas = []
         for _, nro in emitidos:

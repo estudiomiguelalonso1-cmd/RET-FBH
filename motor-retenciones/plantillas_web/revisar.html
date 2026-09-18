@@ -17,6 +17,13 @@
     <span>Esta factura ya está cargada como comprobante #{{ ya_cargada.id }}.
     Si confirmás otra vez, se duplica.</span></div>
 {% endif %}
+{% if f.letra == 'M' or f.sujeta_a_retencion %}
+  <div class="aviso"><span class="ico">!</span>
+    <span>{% if f.letra == 'M' %}Comprobante clase M{% else %}Factura A con leyenda
+    "operación sujeta a retención"{% endif %}: por la RG 1575 hay que retener también
+    el IVA, y en Ganancias se aplica el mayor entre el régimen general y la alícuota
+    de esa resolución.</span></div>
+{% endif %}
 {% if not proveedor %}
   <div class="aviso info"><span class="ico">i</span>
     <span>No está dado de alta. Al confirmar se crea con los datos de esta factura.
