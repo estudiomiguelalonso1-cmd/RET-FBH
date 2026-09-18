@@ -25,7 +25,7 @@
 {% endif %}
 {% if not proveedor %}
   <div class="aviso info"><span class="ico">i</span>
-    <span>Se da de alta al confirmar.</span></div>
+    <span>Proveedor nuevo: se dará de alta con los datos de esta factura.</span></div>
 {% endif %}
 
 <form method="get" action="{{ url_for('revisar', nombre=nombre) }}" id="fc" name="fc">
