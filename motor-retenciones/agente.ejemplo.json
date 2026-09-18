@@ -1,0 +1,11 @@
+{
+  "razon_social": "RAZON SOCIAL DEL AGENTE",
+  "cuit": "00000000000",
+
+  "_nota": "Los dos certificados modelo traen domicilios distintos. Se respeta lo que imprime cada uno hasta que se confirme cual es el vigente.",
+  "domicilios": {
+    "default": "Domicilio del agente",
+    "ganancias": "Domicilio del agente",
+    "iibb_caba": "Domicilio del agente"
+  }
+}

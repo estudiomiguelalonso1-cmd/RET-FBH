@@ -174,6 +174,22 @@ def imprimir(r):
         print(f"  AVISO: {a}")
 
 
+def excepciones():
+    """Retenciones que quedan fuera de la verificacion, con el motivo.
+
+    Son filas del historico con datos inconsistentes entre si, donde no se puede
+    saber cual es el valor correcto. Se apartan en vez de contarlas como error del
+    motor, pero quedan listadas para que no se pierdan de vista.
+    """
+    ruta = DIR / "excepciones.csv"
+    if not ruta.exists():
+        return {}
+    import csv
+    with ruta.open(encoding="utf-8-sig", newline="") as fh:
+        return {r["nro_certificado"].strip(): r["motivo"]
+                for r in csv.DictReader(fh, delimiter=";") if r.get("nro_certificado")}
+
+
 def verificar(conn):
     """Recalcula todo el historico y lo compara contra lo que se practico.
 
@@ -182,16 +198,20 @@ def verificar(conn):
     para el dia a dia, no solo para revisar el pasado.
     """
     filas = conn.execute(
-        "SELECT r.id, r.regimen, r.monto, r.estado, r.periodo, c.cuit, c.neto, "
-        "       c.fecha, r.fecha_retencion "
+        "SELECT r.id, r.regimen, r.monto, r.estado, r.periodo, r.nro_certificado, "
+        "       c.cuit, c.neto, c.fecha, r.fecha_retencion "
         "FROM retenciones r JOIN comprobantes c ON c.id = r.comprobante_id "
         "WHERE r.impuesto = 'ganancias' AND r.regimen IS NOT NULL "
         "ORDER BY r.id").fetchall()
-    ok = dif = omitidas = 0
-    detalle = []
+    excl = excepciones()
+    ok = dif = omitidas = sin_practicar = 0
+    detalle, apartadas = [], []
     for f in filas:
         if f["estado"] == "anulada":
             omitidas += 1
+            continue
+        if (f["nro_certificado"] or "").strip() in excl:
+            apartadas.append((f, excl[f["nro_certificado"].strip()]))
             continue
         r = calcular(conn, f["cuit"], f["neto"], int(f["regimen"]),
                      f["fecha_retencion"] or f["fecha"], antes_de=f["id"])
@@ -201,11 +221,15 @@ def verificar(conn):
             continue
         if abs(g["monto"] - f["monto"]) <= 0.01:
             ok += 1
+        elif not f["monto"]:
+            sin_practicar += 1        # la planilla la dejo en cero
         else:
             dif += 1
             detalle.append((f, g))
     print(f"Ganancias recalculadas desde la base: {ok} coinciden, {dif} difieren, "
-          f"{omitidas} sin calcular (anuladas)")
+          f"{omitidas} anuladas, {sin_practicar} sin practicar, {len(apartadas)} apartadas")
+    for f, motivo in apartadas:
+        print(f"   apartada: certificado {f['nro_certificado']} - {motivo}")
     for f, g in detalle:
         print(f"   ret {f['id']:>4} {f['cuit']} {f['periodo']} reg {f['regimen']:>3}  "
               f"practicado {f['monto']:>12,.2f}   calculado {g['monto']:>12,.2f}")

@@ -1,0 +1,41 @@
+<!-- Constancia de retención de Ingresos Brutos (AGIP).
+     Reproduce el layout de la constancia que emite hoy Fiberhome. -->
+<div>
+  <p style="text-align:center"><b style="font-size:14px">Constancia de Retención - Impuesto a los Ingresos Brutos</b></p>
+  <p style="text-align:center"><img src="logo_agip.png" width="90"></p>
+
+  <p style="text-align:center">
+    <b>Certificado N°:</b> {{ nro_certificado }}<br>
+    <b>Fecha:</b> {{ fecha }}
+  </p>
+
+  <p style="margin-top:24px"><b><i style="font-size:12px">Datos del Agente de Retención</i></b></p>
+  <p style="font-size:11px">
+    <b>Apellido y Nombre o Denominación :</b>{{ agente.razon_social }}<br>
+    <b>C.U.I.T. N°:</b> {{ agente.cuit }}<br>
+    <b>Domicilio:</b> {{ agente.domicilio }}
+  </p>
+
+  <p style="margin-top:24px"><b><i style="font-size:12px">Datos del Sujeto Retenido</i></b></p>
+  <table style="font-size:11px">
+    <tr><td width="230"><b>Apellido y Nombre o Denominación:</b></td>
+        <td>{{ sujeto.razon_social }}</td></tr>
+    <tr><td><b>C.U.I.T. Nº:</b></td><td>{{ sujeto.cuit }}</td></tr>
+    <tr><td><b>Domicilio:</b></td><td>{{ sujeto.domicilio }}</td></tr>
+  </table>
+
+  <p style="margin-top:24px"><b><i style="font-size:12px">Datos de la Retención Practicada</i></b></p>
+  <table style="font-size:11px">
+    <tr><td colspan="2"><b>Comprobante que origina la Retención</b></td></tr>
+    <tr><td width="230">{{ comprobante_tipo }}:</td><td>{{ comprobante_numero }}</td></tr>
+    <tr><td><b>Monto del Comprobante que origina la Retención:</b></td>
+        <td>$ {{ monto_comprobante }}</td></tr>
+    <tr><td><b>Monto de la Retención:</b></td><td>$ {{ monto_retencion }}</td></tr>
+    <tr><td><b>Alícuota:</b></td><td><b>{{ alicuota }}</b></td></tr>
+  </table>
+
+  <p style="margin-top:44px; font-size:11px"><b>Firma del Agente de Retención:</b></p>
+  <table style="font-size:11px">
+    <tr><td width="230"><b>Aclaración:</b></td><td><b>Cargo:</b></td></tr>
+  </table>
+</div>

@@ -1,0 +1,60 @@
+<!-- Certificado de retención de Ganancias (SI.CO.RE.).
+     Reproduce el layout del certificado que emite el SIAP. -->
+<div>
+  <!-- MuPDF ignora los anchos en porcentaje: hay que darlos en pixeles como
+       atributo, si no la primera columna se achica y aplasta el logo. -->
+  <table>
+    <tr>
+      <td width="165"><img src="logo_arca.png" width="150"></td>
+      <td width="300" style="text-align:center">
+        <b style="font-size:15px">SI.CO.RE. - Sistema de Control</b><br>
+        <b style="font-size:15px">de Retenciones</b>
+      </td>
+    </tr>
+  </table>
+
+  <p style="margin-top:18px">
+    <span style="margin-left:180px"><b>Certificado N°</b> : {{ nro_certificado }}</span><br>
+    <span style="margin-left:180px"><b>Fecha</b>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;: {{ fecha }}</span>
+  </p>
+
+  <p style="margin-top:20px"><b style="font-size:13px">A. - Datos del Agente de Retención</b></p>
+  <p style="margin-left:18px">
+    <b>Apellido y Nombre o Denominación :</b> {{ agente.razon_social }}<br>
+    <b>C.U.I.T. N°:</b> {{ agente.cuit }}<br>
+    <b>Domicilio :</b> {{ agente.domicilio }}
+  </p>
+
+  <p style="margin-top:14px"><b style="font-size:13px">B. - Datos del Sujeto Retenido</b></p>
+  <p style="margin-left:18px">
+    <b>Apellido y Nombre o Denominación :</b> {{ sujeto.razon_social }}<br>
+    <b>C.U.I.T. Nº :</b> {{ sujeto.cuit }}<br>
+    <b>Domicilio :</b> {{ sujeto.domicilio }}
+  </p>
+
+  <p style="margin-top:14px"><b style="font-size:13px">C. - Datos de la Retención Practicada</b></p>
+  <table style="margin-left:18px">
+    <tr><td width="285"><b>Impuesto</b>&nbsp;:</td><td width="175">{{ impuesto }}</td></tr>
+    <tr><td><b>Régimen</b>&nbsp;:</td><td>{{ regimen }}</td></tr>
+    <tr>
+      <td><b>Comprobante que origina la Retención</b></td>
+      <td>: {{ comprobante_tipo }} Nro.<br>{{ comprobante_numero }}</td>
+    </tr>
+    <tr><td><b>Monto del Comprobante que origina la Retención</b>&nbsp;:</td>
+        <td style="text-align:right">$ {{ monto_comprobante }}</td></tr>
+    <tr><td><b>Imposibilidad de Retención</b></td><td>: {{ imposibilidad }}</td></tr>
+    <tr><td><b>Monto de la Retención</b></td>
+        <td style="text-align:right">$ {{ monto_retencion }}</td></tr>
+  </table>
+
+  <p style="margin-top:26px; margin-left:18px"><b>Firma del Agente de Retención</b></p>
+  <p style="margin-top:18px; margin-left:18px"><b>Aclaración:</b><br><b>Cargo:</b></p>
+
+  <p style="margin-top:16px; border:1px solid black; padding:6px; text-align:center;
+            font-size:10px">
+    Declaro que los datos consignados en este Formulario son correctos y completos y que
+    he confeccionado la presente utilizando la aplicación (software) entregada y aprobada
+    por ARCA sin omitir ni falsear dato alguno que deba contener, siendo fiel expresión de
+    la verdad.
+  </p>
+</div>
