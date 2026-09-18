@@ -172,7 +172,7 @@
       {% if calculo and calculo.retenciones %}
       <table>
         <thead><tr>
-          <th style="width:58px">Aplicar</th>
+          <th style="width:76px">No retener</th>
           <th>Impuesto</th><th>Rég.</th><th class="num">Base</th>
           <th class="num">Alíc.</th><th class="num">A retener</th>
         </tr></thead>
@@ -182,7 +182,7 @@
             <td>
               <input type="checkbox" name="off_{{ r.clave }}" value="1" style="width:auto"
                      {% if not r.activo %}checked{% endif %} onchange="fc.submit()"
-                     title="Marcar para NO retener este impuesto en esta factura">
+                     title="Tildar para no retener este impuesto en esta factura">
             </td>
             <td>{{ r.impuesto }}</td>
             <td><span class="chip">{{ r.regimen }}</span></td>
