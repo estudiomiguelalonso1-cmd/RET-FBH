@@ -53,8 +53,15 @@
             </td>
             <td style="white-space:nowrap">{{ p.comprobante or '—' }}</td>
             <td class="num">{{ p.neto | plata if p.neto else '—' }}</td>
-            <td class="num" style="width:110px">
+            <td class="acciones">
               <a href="{{ url_for('revisar', nombre=p.nombre) }}">Revisar →</a>
+              <form method="post" action="{{ url_for('descartar') }}"
+                    style="display:inline; margin-left:10px"
+                    onsubmit="return confirm('Se borra el archivo {{ p.nombre }} de la bandeja. Lo ya confirmado no se toca.')">
+                <input type="hidden" name="nombre" value="{{ p.nombre }}">
+                <button class="boton secundario" type="submit"
+                        style="padding:3px 9px; font-size:12px">Eliminar</button>
+              </form>
             </td>
           </tr>
         {% endfor %}

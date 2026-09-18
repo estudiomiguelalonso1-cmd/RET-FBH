@@ -211,6 +211,22 @@
       </div>
 
       <div class="cuerpo">
+        {% for r in calculo.retenciones %}
+          {% if r.desglose %}
+          <div class="desglose">
+            <h3>{{ r.impuesto }} régimen {{ r.regimen }} · cómo se llegó a ese importe</h3>
+            <dl>
+              {% for d in r.desglose %}
+                <div style="display:contents" class="{{ 'fuerte' if d.fuerte }}">
+                  <span class="signo">{{ d.signo }}</span>
+                  <dt>{{ d.concepto }}</dt>
+                  <dd>{{ d.importe | plata }}</dd>
+                </div>
+              {% endfor %}
+            </dl>
+          </div>
+          {% endif %}
+        {% endfor %}
         {% for a in calculo.avisos %}
           <div class="aviso"><span class="ico">!</span><span>{{ a }}</span></div>
         {% endfor %}

@@ -104,6 +104,22 @@ tfoot td{
 tfoot tr:first-child td{border-top:2px solid var(--tinta-2)}
 .destacado{font-size:16px}
 
+/* ---------- desglose del calculo ---------- */
+.desglose{
+  border:1px solid var(--linea); border-radius:10px; background:#fafbfd;
+  padding:12px 14px; margin-top:12px; font-size:13px;
+}
+.desglose h3{
+  margin:0 0 9px; font-size:12px; font-weight:620; color:var(--tenue);
+  text-transform:uppercase; letter-spacing:.05em;
+}
+.desglose dl{display:grid; grid-template-columns:14px 1fr auto; gap:3px 8px; margin:0}
+.desglose .signo{color:var(--suave); text-align:center}
+.desglose dt{color:var(--tinta-2); min-width:0}
+.desglose dd{margin:0; text-align:right; font-variant-numeric:tabular-nums}
+.desglose .fuerte dt,.desglose .fuerte dd{font-weight:650; color:var(--tinta)}
+.desglose .fuerte{border-top:1px solid var(--linea-fuerte); padding-top:4px; margin-top:2px}
+
 /* ---------- lista de datos ---------- */
 .dato{display:grid; grid-template-columns:132px minmax(0,1fr); gap:9px 16px; margin:0; font-size:13.8px}
 .dato dt{color:var(--tenue)}

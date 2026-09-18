@@ -225,6 +225,19 @@ def subir():
     return redirect(url_for("revisar", nombre=nombre))
 
 
+@app.route("/descartar", methods=["POST"])
+def descartar():
+    """Saca una factura de la bandeja sin procesarla.
+
+    Solo borra el PDF de la carpeta de entrada. Si ya estaba confirmada, el
+    comprobante y sus retenciones no se tocan: para eso esta anular.
+    """
+    pdf = ENTRADA / Path(request.form.get("nombre", "")).name
+    if pdf.exists() and pdf.parent == ENTRADA:
+        pdf.unlink()
+    return redirect(url_for("bandeja"))
+
+
 @app.route("/factura/<path:nombre>")
 def factura_pdf(nombre):
     pdf = buscar_pdf(nombre)

@@ -154,6 +154,24 @@ def meses_de_atraso(periodo_padron, periodo_pago):
     return (a2 - a1) * 12 + (m2 - m1)
 
 
+def pagos_del_mes(conn, cuit, periodo, regimen, antes_de=None):
+    """Las facturas anteriores del mes para ese proveedor y regimen.
+
+    Sirve para mostrar de donde sale el acumulado: sin esto el importe a retener
+    parece salir de la nada cuando el minimo ya se consumio en pagos previos.
+    """
+    sql = ("SELECT c.punto_venta, c.numero, c.numero_crudo, c.fecha, c.neto, "
+           "       r.monto, r.fecha_retencion "
+           "FROM retenciones r JOIN comprobantes c ON c.id = r.comprobante_id "
+           "WHERE r.impuesto = 'ganancias' AND r.estado <> 'anulada' "
+           "AND c.cuit = ? AND r.periodo = ? AND r.regimen = ?")
+    args = [cuit, periodo, str(regimen)]
+    if antes_de is not None:
+        sql += " AND r.id < ?"
+        args.append(antes_de)
+    return conn.execute(sql + " ORDER BY r.id", args).fetchall()
+
+
 def alicuota_iibb(conn, cuit, fecha):
     """Alicuota de retencion del padron AGIP vigente a esa fecha.
 
@@ -236,9 +254,35 @@ def retencion_ganancias(conn, cuit, p, neto, cod_regimen, fecha, periodo, antes_
     if bruta and monto == 0:
         nota = (f"no llega al minimo de retencion (${reg['monto_minimo']:,.2f}): "
                 f"la base queda para el proximo pago del mes")
+    anteriores = pagos_del_mes(conn, cuit, periodo, cod_regimen, antes_de)
+    desglose = []
+    if anteriores:
+        for a in anteriores:
+            etiqueta = (f"{a['punto_venta']}-{a['numero']}" if a["punto_venta"]
+                        else (a["numero_crudo"] or "factura anterior"))
+            desglose.append({"concepto": f"Factura {etiqueta}"
+                                         + (f" del {a['fecha'][8:10]}/{a['fecha'][5:7]}"
+                                            if a["fecha"] else ""),
+                             "importe": a["neto"], "signo": "+"})
+        desglose.append({"concepto": "Esta factura", "importe": neto, "signo": "+"})
+        desglose.append({"concepto": "Pagado en el mes", "importe": consumido + neto,
+                         "signo": "=", "fuerte": True})
+    desglose.append({"concepto": "Mínimo no imponible del régimen",
+                     "importe": reg["monto_no_sujeto"], "signo": "−"})
+    desglose.append({"concepto": "Base de cálculo",
+                     "importe": max(0.0, base_acumulada), "signo": "=", "fuerte": True})
+    desglose.append({"concepto": (f"Retención al {alic:.2%}" if alic != "s/escala"
+                                  else "Retención por escala"),
+                     "importe": redondear(bruta + ya_retenido), "signo": "×"})
+    if ya_retenido:
+        desglose.append({"concepto": "Ya retenido este mes",
+                         "importe": ya_retenido, "signo": "−"})
+    desglose.append({"concepto": "A retener ahora", "importe": monto,
+                     "signo": "=", "fuerte": True})
+
     return {"impuesto": "Ganancias", "regimen": str(cod_regimen),
             "concepto": reg["concepto"], "base": redondear(base), "alicuota": alic,
-            "monto": monto, "nota": nota,
+            "monto": monto, "nota": nota, "desglose": desglose,
             "detalle": (f"minimo no imponible: queda ${saldo:,.2f} "
                         f"de ${reg['monto_no_sujeto']:,.2f}")}
 
