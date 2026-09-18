@@ -282,9 +282,7 @@ def retencion_ganancias(conn, cuit, p, neto, cod_regimen, fecha, periodo, antes_
 
     return {"impuesto": "Ganancias", "regimen": str(cod_regimen),
             "concepto": reg["concepto"], "base": redondear(base), "alicuota": alic,
-            "monto": monto, "nota": nota, "desglose": desglose,
-            "detalle": (f"minimo no imponible: queda ${saldo:,.2f} "
-                        f"de ${reg['monto_no_sujeto']:,.2f}")}
+            "monto": monto, "nota": nota, "desglose": desglose, "detalle": None}
 
 
 def calcular(conn, cuit, neto, cod_regimen=None, fecha=None, antes_de=None,
