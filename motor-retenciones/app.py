@@ -111,6 +111,44 @@ def desactivados_de(args):
     return {c for c in IMPUESTO_CLAVE.values() if args.get(f"off_{c}") == "1"}
 
 
+def clave_linea(r):
+    """Identifica una linea del calculo: Ganancias puede tener varias, una por regimen."""
+    return f"{IMPUESTO_CLAVE.get(r['impuesto'], r['impuesto'])}_{r['regimen']}"
+
+
+def aplicar_overrides(calculo, args):
+    """Pisa la base o la alicuota de una linea con lo que se corrigio en pantalla.
+
+    Lo editado es lo que se guarda y lo que sale impreso en el certificado, asi
+    que se deja constancia de que la linea se ajusto a mano.
+    """
+    for r in calculo["retenciones"]:
+        k = clave_linea(r)
+        base = args.get(f"base_ret_{k}", type=float)
+        alic = args.get(f"alic_ret_{k}", type=float)
+        if base is None and alic is None:
+            continue
+        base_final = r["base"] if base is None else base
+        if alic is not None:
+            alic_final = alic / 100
+        elif isinstance(r["alicuota"], str):
+            alic_final = None            # s/escala y no la tocaron: no se recalcula
+        else:
+            alic_final = r["alicuota"]
+        if alic_final is None:
+            continue
+        nuevo = calcular.redondear(base_final * alic_final)
+        if abs(base_final - r["base"]) < 0.005 and abs(alic_final - (r["alicuota"] or 0)) < 1e-9:
+            continue
+        r["base"], r["alicuota"], r["monto"] = base_final, alic_final, nuevo
+        r["editada"] = True
+        r["desglose"] = None
+        r["nota"] = "base o alícuota ajustadas a mano"
+    calculo["total"] = calcular.redondear(sum(x["monto"] for x in calculo["retenciones"]))
+    calculo["a_pagar"] = calcular.redondear(calculo["neto"] - calculo["total"])
+    return calculo
+
+
 def enlazar_facturas_previas(calculo):
     """Marca que facturas anteriores del desglose tienen su PDF disponible."""
     for r in calculo["retenciones"]:
@@ -353,6 +391,7 @@ def revisar(nombre):
                 neto_gravado=f["importes"]["neto_gravado"], partidas=partidas or None,
                 letra=f["letra"], sujeta_a_retencion=f["sujeta_a_retencion"],
                 iva_facturado=f["importes"]["iva"])
+            calculo = aplicar_overrides(calculo, request.args)
             calculo = enlazar_facturas_previas(marcar_desactivados(calculo, apagados))
         regimenes = conn.execute(
             "SELECT cod_regimen, concepto FROM regimenes_ganancias "
@@ -394,7 +433,7 @@ def confirmar():
             neto_gravado=f["importes"]["neto_gravado"], partidas=partidas or None,
             letra=f["letra"], sujeta_a_retencion=f["sujeta_a_retencion"],
             iva_facturado=f["importes"]["iva"])
-        calculo = marcar_desactivados(calculo, apagados)
+        calculo = marcar_desactivados(aplicar_overrides(calculo, request.form), apagados)
         cid, emitidos = procesar.guardar(conn, f, calculo, fecha_pago, servicio_caba)
         for _, nro in emitidos:
             certificados.emitir(conn, certificados.retenciones(conn, certificado=nro))

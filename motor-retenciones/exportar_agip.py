@@ -130,7 +130,8 @@ def generar(periodo, proveedores=None, iva=0.0, conn=None):
     conn = conn or conectar()
     try:
         filas = conn.execute(
-            "SELECT r.id, r.regimen, r.monto, r.alicuota, r.fecha_retencion, "
+            "SELECT r.id, r.regimen, r.monto, r.alicuota, r.base_imponible, "
+            "       r.fecha_retencion, "
             "       r.nro_certificado, c.id AS comprobante_id, c.tipo, c.letra, "
             "       c.punto_venta, c.numero, c.numero_crudo, c.agrupa_varias, "
             "       c.fecha AS fecha_comprobante, c.fecha_cruda, c.neto, "
@@ -188,7 +189,10 @@ def generar(periodo, proveedores=None, iva=0.0, conn=None):
 
         fr, _ = fecha(r["fecha_retencion"])
         fc, _ = fecha(r["fecha_comprobante"])
-        neto = r["neto"]
+        # AGIP revalida que monto sujeto x alicuota = retencion, asi que se usa la
+        # base guardada en la retencion y no el neto del comprobante: pueden
+        # diferir si alguien la ajusto a mano.
+        neto = r["base_imponible"] if r["base_imponible"] is not None else r["neto"]
         importe_iva = neto * iva
         lineas.append(linea(
             fecha_retencion=fr, tipo_comprobante=tipo_comp, letra=r["letra"] or "A",

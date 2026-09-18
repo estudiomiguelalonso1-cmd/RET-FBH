@@ -189,10 +189,18 @@
             </td>
             <td>{{ r.impuesto }}</td>
             <td><span class="chip">{{ r.regimen }}</span></td>
-            <td class="num">{{ r.base | plata }}</td>
+            <td class="num">
+              <input type="number" step="0.01" style="text-align:right; width:130px"
+                     name="base_ret_{{ r.clave }}_{{ r.regimen }}" value="{{ '%.2f'|format(r.base) }}"
+                     onchange="fc.submit()">
+            </td>
             <td class="num">
               {% if r.alicuota is string %}{{ r.alicuota }}
-              {% else %}{{ '%.2f'|format(r.alicuota * 100) }}%{% endif %}
+              {% else %}
+                <input type="number" step="0.01" style="text-align:right; width:78px"
+                       name="alic_ret_{{ r.clave }}_{{ r.regimen }}"
+                       value="{{ '%.2f'|format(r.alicuota * 100) }}" onchange="fc.submit()">
+              {% endif %}
             </td>
             <td class="num">
               {% if r.activo %}<strong>{{ r.monto | plata }}</strong>
@@ -278,6 +286,13 @@
     <input type="hidden" name="base_{{ pt.n }}" value="{{ pt.item.subtotal }}">
   {% endfor %}
   {% for c in apagados %}<input type="hidden" name="off_{{ c }}" value="1">{% endfor %}
+  {% for r in calculo.retenciones %}
+    <input type="hidden" name="base_ret_{{ r.clave }}_{{ r.regimen }}" value="{{ '%.2f'|format(r.base) }}">
+    {% if r.alicuota is not string %}
+      <input type="hidden" name="alic_ret_{{ r.clave }}_{{ r.regimen }}"
+             value="{{ '%.2f'|format(r.alicuota * 100) }}">
+    {% endif %}
+  {% endfor %}
   <button class="boton" type="submit">Confirmar y emitir certificados</button>
   <a class="boton secundario" href="{{ url_for('bandeja') }}">Cancelar</a>
 </form>
