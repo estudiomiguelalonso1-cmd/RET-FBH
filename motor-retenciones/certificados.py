@@ -145,6 +145,24 @@ def retenciones(conn, periodo=None, certificado=None, impuesto=None):
     return conn.execute(sql + " GROUP BY rc.id ORDER BY rc.fecha_retencion, rc.id", args).fetchall()
 
 
+def emitir(conn, filas, destino=None, agente=None):
+    """Genera los PDF de esas retenciones. Devuelve (rutas, proveedores_sin_domicilio)."""
+    agente = agente or cargar_agente()
+    destino = Path(destino or SALIDA)
+    destino.mkdir(parents=True, exist_ok=True)
+    rutas, sin_domicilio = [], set()
+    for r in filas:
+        conf = IMPUESTOS[r["impuesto"]]
+        html = Template((PLANTILLAS / conf["plantilla"]).read_text(encoding="utf-8"))
+        nombre = (f"Ret_{conf['etiqueta']}_{(r['nro_certificado'] or '').replace('/', '-')}"
+                  f"_{r['cuit']}.pdf")
+        generar_pdf(html.render(**contexto(r, agente, r["impuesto"])), destino / nombre)
+        rutas.append(destino / nombre)
+        if not r["domicilio"]:
+            sin_domicilio.add((r["cuit"], r["razon_social"]))
+    return rutas, sin_domicilio
+
+
 def main():
     ap = argparse.ArgumentParser(description="Genera los certificados de retencion en PDF")
     ap.add_argument("--periodo", help="AAAA-MM")
@@ -155,23 +173,11 @@ def main():
     if not (args.periodo or args.certificado):
         ap.error("indica --periodo o --certificado")
 
-    agente = cargar_agente()
-    destino = Path(args.salida)
-    destino.mkdir(parents=True, exist_ok=True)
     conn = conectar()
     try:
         filas = retenciones(conn, args.periodo, args.certificado, args.impuesto)
-        sin_domicilio = set()
-        for r in filas:
-            conf = IMPUESTOS[r["impuesto"]]
-            html = Template((PLANTILLAS / conf["plantilla"]).read_text(encoding="utf-8"))
-            ctx = contexto(r, agente, r["impuesto"])
-            nombre = (f"Ret_{conf['etiqueta']}_{(r['nro_certificado'] or '').replace('/', '-')}"
-                      f"_{r['cuit']}.pdf")
-            generar_pdf(html.render(**ctx), destino / nombre)
-            if not r["domicilio"]:
-                sin_domicilio.add((r["cuit"], r["razon_social"]))
-        print(f"{len(filas)} certificados -> {destino.name}/")
+        rutas, sin_domicilio = emitir(conn, filas, args.salida)
+        print(f"{len(rutas)} certificados -> {Path(args.salida).name}/")
         if sin_domicilio:
             print(f"\n{len(sin_domicilio)} proveedores sin domicilio cargado "
                   f"(el certificado sale con el campo vacio):")

@@ -25,26 +25,29 @@ COD_CONDICION = "01"
 SUSPENDIDO = "0"
 TIPO_DOC_CUIT = "80"
 
-# Codigo de impuesto por tributo. 217 y 767 verificados contra el archivo del ERP.
+# Codigo de impuesto por tributo, para el archivo de SICORE.
 #
-# SUSS no figura: desde el 01/03/2015 (RG 3726/15) las retenciones de seguridad
-# social NO se declaran por SICORE sino por SIRE, con el F. 2004. Por eso el
-# archivo del ERP no tiene ninguna linea de SUSS. Ver INFORME_VALIDACION.md.
+# Solo Ganancias. Los certificados que emite Fiberhome muestran que sus otras dos
+# retenciones salen por SIRE y no por SICORE:
+#
+#   IVA  -> F. 2005, impuesto 216 "SIRE - IVA", regimen 831
+#   SUSS -> F. 2004, impuesto 353 "Retenciones contrib. seg. social", regimen 748
+#
+# (El archivo del ERP de otro cliente si declara el IVA por SICORE con 767/831.
+# Se respeta lo que hace Fiberhome, que es lo que estan emitiendo.)
 COD_IMPUESTO = {
     "ganancias": "217",
-    "iva": "767",
-    "suss": None,          # va por SIRE, no por SICORE
+    "iva": None,           # va por SIRE (F. 2005)
+    "suss": None,          # va por SIRE (F. 2004)
 }
 # Codigo de regimen para los tributos que no lo traen por fila.
 #
-# 831 = "Locacion de obras y prestaciones de servicios realizados por empresas de
-# limpieza de edificios, investigacion y/o seguridad y recoleccion de residuos
-# domiciliarios" (RG 3164), alicuota 10,5 % sobre el neto. Es el codigo que usa el
-# ERP en su propio archivo, y el que corresponde al proveedor alcanzado.
-# El encabezado del Excel dice "Reg. 966", que no se corresponde con este regimen.
+# 831 = "Empresas de limpieza Edif, Investig y seg. y recolec. resid." (RG 3164),
+# 748 = "Reten contrib seg soc prestadores serv limpieza inmuebles" (RG 1556).
+# Los dos verificados contra los certificados que emite Fiberhome.
 COD_REGIMEN_FIJO = {
     "iva": "831",
-    "suss": "748",         # RG 1556, pero se declara en SIRE (F. 2004)
+    "suss": "748",
 }
 
 # Que va en "Importe del comprobante" (pos 29-44).
@@ -209,8 +212,8 @@ def generar(periodo, iva=IVA_POR_DEFECTO, criterio=IMPORTE_COMPROBANTE):
     lineas, sire, derivados = [], [], []
     for r in filas:
         cod_imp = COD_IMPUESTO[r["tributo"]]
-        if r["tributo"] == "suss":
-            sire.append(r)                      # se declara aparte, por SIRE
+        if r["tributo"] in ("iva", "suss"):
+            sire.append(r)                      # se declaran aparte, por SIRE
             continue
         if cod_imp is None or r["regimen"] in (None, "None"):
             avisos.append(f"fila {r['fila']}: falta el codigo de impuesto/regimen para "
@@ -264,8 +267,8 @@ def main():
             print("  ", d)
         print()
     if sire:
-        print(f"{len(sire)} retencion(es) de SUSS no van en este archivo: desde el 01/03/2015")
-        print("se declaran por SIRE (F. 2004), regimen 748. Ver INFORME_VALIDACION.md.")
+        print(f"{len(sire)} retencion(es) de IVA/SUSS no van en este archivo: se declaran")
+        print("por SIRE (F. 2005 y F. 2004). Ver INFORME_VALIDACION.md.")
     if avisos:
         print()
         print(f"AVISOS ({len(avisos)}):")
