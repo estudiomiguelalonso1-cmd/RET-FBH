@@ -144,6 +144,8 @@ def leer(pdf):
 
     importes = {
         "neto_gravado": total("Importe Neto Gravado: $"),
+        "neto_no_gravado": total("Importe Neto No Gravado: $"),
+        "exento": total("Importe Op. Exentas: $") or total("Importe Exento: $"),
         "iva_27": total("IVA 27%: $"),
         "iva_21": total("IVA 21%: $"),
         "iva_105": total("IVA 10.5%: $"),
@@ -154,6 +156,11 @@ def leer(pdf):
         "total": total("Importe Total: $"),
     }
     importes["iva"] = sum(v or 0 for k, v in importes.items() if k.startswith("iva_"))
+    # Base de Ganancias y de SUSS: el pago sin IVA, e incluye lo no gravado y lo
+    # exento. La de IVA (RG 3164), en cambio, es solo el precio neto gravado.
+    importes["base_ganancias"] = ((importes["neto_gravado"] or 0)
+                                  + (importes["neto_no_gravado"] or 0)
+                                  + (importes["exento"] or 0))
 
     cae = re.search(r"\b(\d{14})\b", texto)
     return {
@@ -174,7 +181,7 @@ def controles(d):
     avisos = []
     i = d["importes"]
     if i["neto_gravado"] is not None and i["total"] is not None:
-        esperado = (i["neto_gravado"] or 0) + i["iva"] + (i["otros_tributos"] or 0)
+        esperado = (i["base_ganancias"] or 0) + i["iva"] + (i["otros_tributos"] or 0)
         if abs(esperado - i["total"]) > 0.01:
             avisos.append(f"neto + IVA + otros = {esperado:,.2f} y el total dice "
                           f"{i['total']:,.2f}")

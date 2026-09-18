@@ -122,14 +122,15 @@ def revisar(nombre):
             "SELECT * FROM proveedores WHERE cuit = ?", (cuit,)).fetchone()
         regimen = request.args.get("regimen", type=int) or procesar.regimen_habitual(conn, cuit)
         fecha_pago = request.args.get("fecha_pago") or calcular.date.today().isoformat()
-        neto = request.args.get("neto", type=float) or f["importes"]["neto_gravado"]
+        neto = request.args.get("neto", type=float) or f["importes"]["base_ganancias"]
         servicio_caba = request.args.get("servicio_caba") == "1"
 
         calculo = None
         if regimen and neto:
             calculo = calcular.calcular(conn, cuit, neto, regimen, fecha_pago,
                                         proveedor_provisorio=provisorio(f),
-                                        servicio_en_caba=servicio_caba)
+                                        servicio_en_caba=servicio_caba,
+                                        neto_gravado=f["importes"]["neto_gravado"])
         regimenes = conn.execute(
             "SELECT cod_regimen, concepto FROM regimenes_ganancias "
             "WHERE situacion = 'I' AND tipo_persona = '' ORDER BY cod_regimen").fetchall()
@@ -162,7 +163,8 @@ def confirmar():
         cambios, _ = procesar.sincronizar_proveedor(conn, f, True)
         calculo = calcular.calcular(conn, f["emisor"]["cuit"], neto, regimen, fecha_pago,
                                     proveedor_provisorio=provisorio(f),
-                                    servicio_en_caba=servicio_caba)
+                                    servicio_en_caba=servicio_caba,
+                                    neto_gravado=f["importes"]["neto_gravado"])
         cid, emitidos = procesar.guardar(conn, f, calculo, fecha_pago, servicio_caba)
         rutas = []
         for _, nro in emitidos:

@@ -24,6 +24,11 @@ DB = DIR / "retenciones.db"
 ALICUOTA_IVA_3164 = 0.105
 ALICUOTA_SUSS_1556 = 0.06
 
+# RG 3164: no se retiene IVA si el neto de la operacion no llega a este monto. Si
+# hay varias facturas en el mes se suman, y si la suma lo supera quedan todas
+# sujetas. Es un importe fijo de la norma: revisar si AFIP lo actualiza.
+MINIMO_IVA_3164 = 17_000
+
 
 def redondear(v):
     return float(Decimal(str(v)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP))
@@ -72,6 +77,29 @@ def parametros_regimen(conn, cod_regimen, situacion="I", tipo_persona=""):
         "AND tipo_persona IN (?, '') ORDER BY tipo_persona DESC LIMIT 1",
         (cod_regimen, situacion, tipo_persona)).fetchone()
     return fila
+
+
+def retenido_en_el_mes(conn, cuit, periodo, regimen, impuesto="ganancias", antes_de=None):
+    """Retenciones ya practicadas a ese proveedor en el mes, por ese regimen."""
+    sql = ("SELECT COALESCE(SUM(r.monto), 0) AS m FROM retenciones r "
+           "JOIN comprobantes c ON c.id = r.comprobante_id "
+           "WHERE r.impuesto = ? AND r.estado <> 'anulada' "
+           "AND c.cuit = ? AND r.periodo = ?")
+    args = [impuesto, cuit, periodo]
+    if regimen is not None:
+        sql += " AND r.regimen = ?"
+        args.append(str(regimen))
+    if antes_de is not None:
+        sql += " AND r.id < ?"
+        args.append(antes_de)
+    return conn.execute(sql, args).fetchone()["m"]
+
+
+def facturado_en_el_mes(conn, cuit, periodo):
+    """Neto facturado por ese proveedor en el mes, para el minimo de la RG 3164."""
+    return conn.execute(
+        "SELECT COALESCE(SUM(neto), 0) AS n FROM comprobantes "
+        "WHERE cuit = ? AND substr(fecha, 1, 7) = ?", (cuit, periodo)).fetchone()["n"]
 
 
 def consumido_del_minimo(conn, cuit, periodo, regimen, antes_de=None):
@@ -137,7 +165,7 @@ def alicuota_iibb(conn, cuit, fecha):
 
 
 def calcular(conn, cuit, neto, cod_regimen, fecha=None, antes_de=None,
-             proveedor_provisorio=None, servicio_en_caba=False):
+             proveedor_provisorio=None, servicio_en_caba=False, neto_gravado=None):
     """Calcula las cuatro retenciones de un pago.
 
     `proveedor_provisorio` permite cotizar una factura de un proveedor que todavia
@@ -171,22 +199,31 @@ def calcular(conn, cuit, neto, cod_regimen, fecha=None, antes_de=None,
     elif reg is None:
         resultado["avisos"].append(f"el regimen {cod_regimen} no esta en la tabla de AFIP")
     else:
+        # Metodo acumulativo de la RG 830: la retencion se calcula sobre todo lo
+        # pagado en el mes menos el minimo no imponible, y se le resta lo ya
+        # retenido. Importa cuando un pago no llego al minimo de retencion: esa
+        # base no se pierde, se arrastra al pago siguiente.
         consumido = consumido_del_minimo(conn, cuit, periodo, cod_regimen, antes_de)
+        ya_retenido = retenido_en_el_mes(conn, cuit, periodo, cod_regimen,
+                                         "ganancias", antes_de)
         saldo = max(0.0, reg["monto_no_sujeto"] - consumido)
         base = neto - saldo
+        base_acumulada = consumido + neto - reg["monto_no_sujeto"]
         if reg["alicuota"] == 0:
-            bruta = retencion_por_escala(max(0.0, base))
+            bruta = retencion_por_escala(max(0.0, base_acumulada)) - ya_retenido
             alic = "s/escala"
         else:
-            bruta = max(0.0, base) * reg["alicuota"]
+            bruta = max(0.0, base_acumulada) * reg["alicuota"] - ya_retenido
             alic = reg["alicuota"]
+        bruta = max(0.0, bruta)
         if exc_gan is not None and exc_gan["porcentaje"] is not None:
             bruta = max(0.0, base) * exc_gan["porcentaje"]
             alic = exc_gan["porcentaje"]
         monto = 0.0 if bruta < reg["monto_minimo"] else redondear(bruta)
         nota = None
         if bruta and monto == 0:
-            nota = f"por debajo del minimo de retencion (${reg['monto_minimo']:,.2f})"
+            nota = (f"no llega al minimo de retencion (${reg['monto_minimo']:,.2f}): "
+                    f"la base queda para el proximo pago del mes")
         resultado["retenciones"].append({
             "impuesto": "Ganancias", "regimen": str(cod_regimen),
             "concepto": reg["concepto"], "base": redondear(base), "alicuota": alic,
@@ -238,10 +275,24 @@ def calcular(conn, cuit, neto, cod_regimen, fecha=None, antes_de=None,
 
     # --- IVA y SUSS -------------------------------------------------------
     if p["retiene_iva_3164"]:
+        # La base del IVA es solo el precio neto gravado: lo no gravado y lo
+        # exento no generan debito fiscal, asi que no hay nada que retener.
+        base_iva = neto_gravado if neto_gravado is not None else neto
+        exc_iva = exclusion(conn, cuit, "iva", fecha)
+        acumulado_mes = facturado_en_el_mes(conn, cuit, periodo) + base_iva
+        if exc_iva is not None and exc_iva["alcance"] == "total":
+            monto_iva, nota_iva = 0.0, ("no se retiene: certificado de exclusion vigente "
+                                        f"hasta {exc_iva['vigencia_hasta'] or 'sin vencimiento'}")
+        elif acumulado_mes < MINIMO_IVA_3164:
+            monto_iva, nota_iva = 0.0, (
+                f"no se retiene: el neto del mes (${acumulado_mes:,.2f}) no llega al "
+                f"minimo de ${MINIMO_IVA_3164:,.2f} de la RG 3164")
+        else:
+            monto_iva, nota_iva = redondear(base_iva * ALICUOTA_IVA_3164), None
         resultado["retenciones"].append({
             "impuesto": "IVA", "regimen": "831", "concepto": "RG 3164",
-            "base": redondear(neto), "alicuota": ALICUOTA_IVA_3164,
-            "monto": redondear(neto * ALICUOTA_IVA_3164), "nota": None,
+            "base": redondear(base_iva), "alicuota": ALICUOTA_IVA_3164,
+            "monto": monto_iva, "nota": nota_iva,
             "detalle": "empresas de limpieza, investigacion y/o seguridad"})
     if p["retiene_suss_1556"]:
         resultado["retenciones"].append({
@@ -310,8 +361,8 @@ def verificar(conn):
         "WHERE r.impuesto = 'ganancias' AND r.regimen IS NOT NULL "
         "ORDER BY r.id").fetchall()
     excl = excepciones()
-    ok = dif = omitidas = sin_practicar = 0
-    detalle, apartadas = [], []
+    ok = dif = omitidas = sin_practicar = arrastre = 0
+    detalle, apartadas, con_error = [], [], set()
     for f in filas:
         if f["estado"] == "anulada":
             omitidas += 1
@@ -329,11 +380,18 @@ def verificar(conn):
             ok += 1
         elif not f["monto"]:
             sin_practicar += 1        # la planilla la dejo en cero
+        elif (f["cuit"], f["periodo"], f["regimen"]) in con_error:
+            # El metodo acumulativo resta lo ya retenido en el mes, asi que si un
+            # pago anterior del mismo grupo salio mal, este lo compensa. No es un
+            # error nuevo.
+            arrastre += 1
         else:
             dif += 1
+            con_error.add((f["cuit"], f["periodo"], f["regimen"]))
             detalle.append((f, g))
     print(f"Ganancias recalculadas desde la base: {ok} coinciden, {dif} difieren, "
-          f"{omitidas} anuladas, {sin_practicar} sin practicar, {len(apartadas)} apartadas")
+          f"{omitidas} anuladas, {sin_practicar} sin practicar, {len(apartadas)} apartadas"
+          + (f", {arrastre} compensan un error anterior del mismo mes" if arrastre else ""))
     for f, motivo in apartadas:
         print(f"   apartada: certificado {f['nro_certificado']} - {motivo}")
     for f, g in detalle:

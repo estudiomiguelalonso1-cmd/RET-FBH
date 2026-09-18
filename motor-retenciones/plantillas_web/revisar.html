@@ -49,6 +49,12 @@
         <hr>
         <dl class="dato">
           <dt>Neto gravado</dt><dd class="mono">{{ f.importes.neto_gravado | plata }}</dd>
+          {% if f.importes.neto_no_gravado %}
+            <dt>No gravado</dt><dd class="mono">{{ f.importes.neto_no_gravado | plata }}</dd>
+          {% endif %}
+          {% if f.importes.exento %}
+            <dt>Exento</dt><dd class="mono">{{ f.importes.exento | plata }}</dd>
+          {% endif %}
           <dt>IVA</dt><dd class="mono">{{ f.importes.iva | plata }}</dd>
           <dt>Otros tributos</dt><dd class="mono">{{ (f.importes.otros_tributos or 0) | plata }}</dd>
           <dt>Total</dt><dd class="mono"><strong>{{ f.importes.total | plata }}</strong></dd>

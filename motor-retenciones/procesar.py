@@ -166,8 +166,9 @@ def main():
             print()
 
         fecha_pago = args.fecha_pago or calcular.date.today().isoformat()
-        calculo = calcular.calcular(conn, e["cuit"], f["importes"]["neto_gravado"],
-                                    regimen, fecha_pago)
+        calculo = calcular.calcular(conn, e["cuit"], f["importes"]["base_ganancias"],
+                                    regimen, fecha_pago,
+                                    neto_gravado=f["importes"]["neto_gravado"])
         calcular.imprimir(calculo)
 
         if not args.confirmar:
