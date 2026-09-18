@@ -220,6 +220,9 @@ def leer(pdf):
                                   + (importes["neto_no_gravado"] or 0)
                                   + (importes["exento"] or 0))
 
+    # RG 1575: los comprobantes clase M y los clase A con esta leyenda obligan a
+    # retener tambien el IVA, con alicuotas propias.
+    leyenda = bool(re.search(r"operaci[oó]n\s+sujeta\s+a\s+retenci[oó]n", texto, re.I))
     cae = re.search(r"\b(\d{14})\b", texto)
     return {
         "archivo": Path(pdf).name,

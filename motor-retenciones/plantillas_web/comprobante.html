@@ -1,0 +1,103 @@
+{% extends "base.html" %}
+{% block titulo %}Comprobante #{{ c.id }} — Retenciones{% endblock %}
+{% block cuerpo %}
+
+<div class="titulo">
+  <h1>{{ c.razon_social }}</h1>
+  <p>{{ c.tipo }} {{ c.letra or '' }} · {{ c.punto_venta or '' }}{% if c.numero %}-{{ c.numero }}{% endif %}
+     · {{ c.fecha or '—' }}</p>
+  <span class="chip">Comprobante #{{ c.id }}</span>
+</div>
+
+<div class="doble">
+
+  <div class="apilado">
+    <div class="panel">
+      <div class="cab"><h2>Datos</h2></div>
+      <div class="cuerpo">
+        <dl class="dato">
+          <dt>CUIT</dt><dd class="mono">{{ c.cuit }}</dd>
+          <dt>Domicilio</dt><dd>{{ c.domicilio or '—' }}</dd>
+          <dt>Inscripción IIBB</dt><dd class="mono">{{ c.nro_inscripcion_ib or '—' }}</dd>
+          <dt>Jurisdicción</dt><dd>{{ c.jurisdiccion or '—' }}</dd>
+        </dl>
+        <hr>
+        <dl class="dato">
+          <dt>Neto</dt><dd class="mono">{{ c.neto | plata }}</dd>
+          <dt>IVA</dt><dd class="mono">{{ (c.importe_iva or 0) | plata }}</dd>
+          <dt>Otros conceptos</dt><dd class="mono">{{ (c.otros_conceptos or 0) | plata }}</dd>
+          <dt>Total</dt><dd class="mono">{{ (c.total or 0) | plata }}</dd>
+          {% if c.numero_crudo %}
+            <dt>Número original</dt><dd>{{ c.numero_crudo }}</dd>
+          {% endif %}
+          {% if c.servicio_en_caba %}
+            <dt>Servicio en CABA</dt><dd>Sí</dd>
+          {% endif %}
+          {% if c.origen %}<dt>Origen</dt><dd>{{ c.origen }}</dd>{% endif %}
+        </dl>
+        {% if pdf %}
+        <p style="margin-top:16px">
+          <a class="boton secundario" href="{{ url_for('factura_pdf', nombre=pdf) }}"
+             target="_blank">Ver la factura ↗</a>
+        </p>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="cab"><h2>Certificados emitidos</h2>
+        <span class="chip {% if archivos %}ok{% endif %}"
+              style="margin-left:auto">{{ archivos | length }}</span>
+      </div>
+      {% if archivos %}
+      <table>
+        <tbody>
+        {% for a in archivos %}
+          <tr><td><a href="{{ url_for('certificado_pdf', nombre=a) }}"
+                     target="_blank">{{ a }}</a></td></tr>
+        {% endfor %}
+        </tbody>
+      </table>
+      {% else %}
+      <div class="vacio">No se emitieron certificados para este comprobante.</div>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="cab"><h2>Retenciones</h2></div>
+    <table>
+      <thead><tr>
+        <th>Impuesto</th><th>Rég.</th><th class="num">Base</th>
+        <th class="num">Alíc.</th><th class="num">Monto</th><th>Certificado</th>
+      </tr></thead>
+      <tbody>
+      {% for r in retenciones %}
+        <tr {% if r.estado != 'practicada' %}style="opacity:.55"{% endif %}>
+          <td>{{ r.impuesto }}</td>
+          <td><span class="chip">{{ r.regimen or '—' }}</span></td>
+          <td class="num">{{ (r.base_imponible or 0) | plata }}</td>
+          <td class="num">{% if r.alicuota %}{{ '%.2f'|format(r.alicuota * 100) }}%{% else %}—{% endif %}</td>
+          <td class="num"><strong>{{ r.monto | plata }}</strong></td>
+          <td>{{ r.nro_certificado or '—' }}</td>
+        </tr>
+        {% if r.motivo %}
+        <tr><td colspan="6" style="padding-top:0">
+          <span class="nota">{{ r.impuesto }}: {{ r.motivo }}</span></td></tr>
+        {% endif %}
+      {% endfor %}
+      </tbody>
+      <tfoot>
+        <tr><td colspan="4">Total retenido</td>
+            <td class="num destacado">
+              {{ retenciones | sum(attribute='monto') | plata }}</td><td></td></tr>
+      </tfoot>
+    </table>
+  </div>
+
+</div>
+
+<p style="margin-top:20px">
+  <a class="boton secundario" href="{{ url_for('bandeja') }}">Volver a la bandeja</a>
+</p>
+{% endblock %}

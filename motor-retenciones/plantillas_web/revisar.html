@@ -14,7 +14,8 @@
 {% endfor %}
 {% if ya_cargada %}
   <div class="aviso"><span class="ico">!</span>
-    <span>Esta factura ya está cargada como comprobante #{{ ya_cargada.id }}.
+    <span>Esta factura ya está cargada como
+    <a href="{{ url_for('comprobante', cid=ya_cargada.id) }}">comprobante #{{ ya_cargada.id }}</a>.
     Si confirmás otra vez, se duplica.</span></div>
 {% endif %}
 {% if f.letra == 'M' or f.sujeta_a_retencion %}
@@ -26,10 +27,10 @@
 {% endif %}
 {% if not proveedor %}
   <div class="aviso info"><span class="ico">i</span>
-    <span>No está dado de alta. Al confirmar se crea con los datos de esta factura.
-    Elegí el régimen de Ganancias: no hay historial del que deducirlo.</span></div>
+    <span>No está dado de alta. Al confirmar se crea con los datos de esta factura.</span></div>
 {% endif %}
 
+<form method="get" action="{{ url_for('revisar', nombre=nombre) }}" id="fc" name="fc">
 <div class="doble">
 
   <div class="panel">
@@ -45,27 +46,46 @@
   <div class="apilado">
 
     <div class="panel">
-      <div class="cab"><h2>Datos leídos</h2></div>
+      <div class="cab"><h2>Datos leídos</h2>
+        <span class="nota" style="margin-left:auto">Editables: corregí lo que salió mal</span>
+      </div>
       <div class="cuerpo">
-        <dl class="dato">
-          <dt>CUIT</dt><dd class="mono">{{ f.emisor.cuit }}</dd>
-          <dt>Domicilio</dt><dd>{{ f.emisor.domicilio or '—' }}</dd>
-          <dt>Ingresos Brutos</dt><dd class="mono">{{ f.emisor.ingresos_brutos or '—' }}</dd>
-          <dt>Condición IVA</dt><dd>{{ f.emisor.condicion_iva or '—' }}</dd>
-        </dl>
-        <hr>
-        <dl class="dato">
-          <dt>Neto gravado</dt><dd class="mono">{{ f.importes.neto_gravado | plata }}</dd>
-          {% if f.importes.neto_no_gravado %}
-            <dt>No gravado</dt><dd class="mono">{{ f.importes.neto_no_gravado | plata }}</dd>
-          {% endif %}
-          {% if f.importes.exento %}
-            <dt>Exento</dt><dd class="mono">{{ f.importes.exento | plata }}</dd>
-          {% endif %}
-          <dt>IVA</dt><dd class="mono">{{ f.importes.iva | plata }}</dd>
-          <dt>Otros tributos</dt><dd class="mono">{{ (f.importes.otros_tributos or 0) | plata }}</dd>
-          <dt>Total</dt><dd class="mono"><strong>{{ f.importes.total | plata }}</strong></dd>
-        </dl>
+        <div class="campos" style="grid-template-columns:1.6fr 1fr">
+          <div>
+            <label for="rs">Razón social</label>
+            <input name="rs" id="rs" value="{{ f.emisor.razon_social or '' }}">
+          </div>
+          <div>
+            <label for="cuit">CUIT</label>
+            <input name="cuit" id="cuit" value="{{ f.emisor.cuit or '' }}">
+          </div>
+        </div>
+        <div style="margin-top:12px">
+          <label for="dom">Domicilio</label>
+          <input name="dom" id="dom" value="{{ f.emisor.domicilio or '' }}">
+        </div>
+        <div class="campos" style="grid-template-columns:1.3fr .6fr .8fr 1fr; margin-top:12px">
+          <div><label for="iibb">Ingresos Brutos</label>
+            <input name="iibb" id="iibb" value="{{ f.emisor.ingresos_brutos or '' }}"></div>
+          <div><label for="letra">Letra</label>
+            <input name="letra" id="letra" value="{{ f.letra or '' }}" maxlength="1"></div>
+          <div><label for="pv">Pto. venta</label>
+            <input name="pv" id="pv" value="{{ f.punto_venta or '' }}"></div>
+          <div><label for="nro">Número</label>
+            <input name="nro" id="nro" value="{{ f.numero or '' }}"></div>
+        </div>
+        <div class="campos" style="grid-template-columns:1fr 1fr 1fr; margin-top:12px">
+          <div><label for="fecha_fc">Fecha de factura</label>
+            <input type="date" name="fecha_fc" id="fecha_fc" value="{{ f.fecha or '' }}"></div>
+          <div><label>IVA facturado</label>
+            <input value="{{ f.importes.iva | plata }}" disabled></div>
+          <div><label>Total</label>
+            <input value="{{ f.importes.total | plata if f.importes.total else '' }}" disabled></div>
+        </div>
+        <div style="margin-top:14px">
+          <button class="boton secundario" type="submit"
+                  style="padding:7px 15px; font-size:13.5px">Recalcular con estos datos</button>
+        </div>
       </div>
     </div>
 
@@ -73,95 +93,103 @@
       <div class="cab"><h2>Retenciones a practicar</h2></div>
       <div class="cuerpo">
 
-        <form method="get" action="{{ url_for('revisar', nombre=nombre) }}" id="formCalculo">
-          <div class="campos">
-            {% if not partidas %}
-            <div>
-              <label for="regimen">Régimen de Ganancias</label>
-              <select name="regimen" id="regimen" onchange="this.form.submit()">
-                <option value="">— elegir —</option>
-                {% for r in regimenes %}
-                  <option value="{{ r.cod_regimen }}" {% if regimen == r.cod_regimen %}selected{% endif %}>
-                    {{ r.cod_regimen }} · {{ r.concepto[:46] }}
-                  </option>
-                {% endfor %}
-              </select>
-            </div>
-            {% else %}
-            <input type="hidden" name="regimen" value="{{ regimen or '' }}">
-            {% endif %}
-            <div>
-              <label for="fecha_pago">Fecha de pago</label>
-              <input type="date" name="fecha_pago" id="fecha_pago" value="{{ fecha_pago }}"
-                     onchange="this.form.submit()">
-            </div>
-            <div>
-              <label for="neto">Base total</label>
-              <input type="number" step="0.01" name="neto" id="neto" value="{{ neto }}"
-                     onchange="this.form.submit()">
-            </div>
-          </div>
-
-          {% if partidas %}
-          <div style="margin-top:16px">
-            <label>Régimen de cada ítem</label>
-            <table style="border:1px solid var(--linea); border-radius:9px; overflow:hidden">
-              <thead><tr><th>Ítem</th><th class="num" style="width:120px">Importe</th>
-                         <th style="width:280px">Régimen</th></tr></thead>
-              <tbody>
-              {% for pt in partidas %}
-                <tr>
-                  <td>{{ pt.item.descripcion or pt.item.codigo or '(sin descripción)' }}
-                    {% if not pt.item.descripcion %}
-                      <span class="nota" style="display:block">
-                        Sin descripción: verificá la actividad en su constancia de inscripción.
-                      </span>
-                    {% endif %}
-                  </td>
-                  <td class="num">{{ (pt.item.subtotal or 0) | plata }}</td>
-                  <td>
-                    <select name="reg_{{ pt.n }}" onchange="this.form.submit()">
-                      <option value="">— elegir —</option>
-                      {% for r in regimenes %}
-                        <option value="{{ r.cod_regimen }}" {% if pt.regimen == r.cod_regimen %}selected{% endif %}>
-                          {{ r.cod_regimen }} · {{ r.concepto[:34] }}
-                        </option>
-                      {% endfor %}
-                    </select>
-                  </td>
-                </tr>
+        <div class="campos">
+          {% if not partidas %}
+          <div>
+            <label for="regimen">Régimen de Ganancias</label>
+            <select name="regimen" id="regimen" onchange="fc.submit()">
+              <option value="">— elegir —</option>
+              {% for r in regimenes %}
+                <option value="{{ r.cod_regimen }}" {% if regimen == r.cod_regimen %}selected{% endif %}>
+                  {{ r.cod_regimen }} · {{ r.concepto[:46] }}
+                </option>
               {% endfor %}
-              </tbody>
-            </table>
-            <p class="nota">Una factura puede traer ítems de distinto régimen. Sale una
-              retención por cada uno, con su propio mínimo no imponible.</p>
+            </select>
           </div>
+          {% else %}
+          <input type="hidden" name="regimen" value="{{ regimen or '' }}">
           {% endif %}
+          <div>
+            <label for="fecha_pago">Fecha de pago</label>
+            <input type="date" name="fecha_pago" id="fecha_pago" value="{{ fecha_pago }}"
+                   onchange="fc.submit()">
+          </div>
+          <div>
+            <label for="neto">Base total</label>
+            <input type="number" step="0.01" name="neto" id="neto" value="{{ neto }}"
+                   onchange="fc.submit()">
+          </div>
+        </div>
 
-          {% if jurisdiccion and jurisdiccion != 'CABA' %}
-          <label style="display:flex; gap:9px; align-items:flex-start; margin-top:14px;
-                        font-size:13.5px; color:var(--tinta-2); font-weight:450">
-            <input type="checkbox" name="servicio_caba" value="1" style="width:auto; margin-top:3px"
-                   {% if servicio_caba %}checked{% endif %} onchange="this.form.submit()">
-            <span>El servicio o producto se prestó en CABA
-              <span class="nota" style="display:block; margin:0">
-                El proveedor es de {{ jurisdiccion }}. Sin esto no corresponde retener IIBB.
-              </span>
+        {% if partidas %}
+        <div style="margin-top:16px">
+          <label>Ítems de la factura</label>
+          <table style="border:1px solid var(--linea); border-radius:9px; overflow:hidden">
+            <thead><tr><th>Descripción</th><th class="num" style="width:135px">Importe</th>
+                       <th style="width:240px">Régimen</th></tr></thead>
+            <tbody>
+            {% for pt in partidas %}
+              <tr>
+                <td>{{ pt.item.descripcion or pt.item.codigo or '(sin descripción)' }}
+                  {% if not pt.item.descripcion %}
+                    <span class="nota" style="display:block">
+                      Sin descripción: verificá la actividad en su constancia de inscripción.
+                    </span>
+                  {% endif %}
+                </td>
+                <td class="num">
+                  <input type="number" step="0.01" name="base_{{ pt.n }}"
+                         value="{{ pt.item.subtotal }}" onchange="fc.submit()"
+                         style="text-align:right">
+                </td>
+                <td>
+                  <select name="reg_{{ pt.n }}" onchange="fc.submit()">
+                    <option value="">— elegir —</option>
+                    {% for r in regimenes %}
+                      <option value="{{ r.cod_regimen }}" {% if pt.regimen == r.cod_regimen %}selected{% endif %}>
+                        {{ r.cod_regimen }} · {{ r.concepto[:32] }}
+                      </option>
+                    {% endfor %}
+                  </select>
+                </td>
+              </tr>
+            {% endfor %}
+            </tbody>
+          </table>
+          <p class="nota">Una factura puede traer ítems de distinto régimen. Sale una
+            retención por cada uno, con su propio mínimo no imponible.</p>
+        </div>
+        {% endif %}
+
+        {% if jurisdiccion and jurisdiccion != 'CABA' %}
+        <label style="display:flex; gap:9px; align-items:flex-start; margin-top:14px;
+                      font-size:13.5px; color:var(--tinta-2); font-weight:450">
+          <input type="checkbox" name="servicio_caba" value="1" style="width:auto; margin-top:3px"
+                 {% if servicio_caba %}checked{% endif %} onchange="fc.submit()">
+          <span>El servicio o producto se prestó en CABA
+            <span class="nota" style="display:block; margin:0">
+              El proveedor es de {{ jurisdiccion }}. Sin esto no corresponde retener IIBB.
             </span>
-          </label>
-          {% endif %}
-        </form>
+          </span>
+        </label>
+        {% endif %}
       </div>
 
       {% if calculo and calculo.retenciones %}
       <table>
         <thead><tr>
+          <th style="width:58px">Aplicar</th>
           <th>Impuesto</th><th>Rég.</th><th class="num">Base</th>
           <th class="num">Alíc.</th><th class="num">A retener</th>
         </tr></thead>
         <tbody>
         {% for r in calculo.retenciones %}
-          <tr>
+          <tr {% if not r.activo %}style="opacity:.45"{% endif %}>
+            <td>
+              <input type="checkbox" name="off_{{ r.clave }}" value="1" style="width:auto"
+                     {% if not r.activo %}checked{% endif %} onchange="fc.submit()"
+                     title="Marcar para NO retener este impuesto en esta factura">
+            </td>
             <td>{{ r.impuesto }}</td>
             <td><span class="chip">{{ r.regimen }}</span></td>
             <td class="num">{{ r.base | plata }}</td>
@@ -169,19 +197,24 @@
               {% if r.alicuota is string %}{{ r.alicuota }}
               {% else %}{{ '%.2f'|format(r.alicuota * 100) }}%{% endif %}
             </td>
-            <td class="num"><strong>{{ r.monto | plata }}</strong></td>
+            <td class="num">
+              {% if r.activo %}<strong>{{ r.monto | plata }}</strong>
+              {% else %}<s>{{ r.monto_original | plata }}</s>{% endif %}
+            </td>
           </tr>
         {% endfor %}
         </tbody>
         <tfoot>
-          <tr><td colspan="4">Total a retener</td>
+          <tr><td colspan="5">Total a retener</td>
               <td class="num destacado">{{ calculo.total | plata }}</td></tr>
-          <tr><td colspan="4">Neto a pagar al proveedor</td>
+          <tr><td colspan="5">Neto a pagar al proveedor</td>
               <td class="num destacado">{{ calculo.a_pagar | plata }}</td></tr>
         </tfoot>
       </table>
 
       <div class="cuerpo">
+        <p class="nota" style="margin-top:0">Destildá un impuesto para no retenerlo en
+          esta factura. Queda registrado igual, en cero y con el motivo.</p>
         {% for a in calculo.avisos %}
           <div class="aviso"><span class="ico">!</span><span>{{ a }}</span></div>
         {% endfor %}
@@ -194,23 +227,7 @@
         {% for r in calculo.retenciones %}
           {% if r.detalle %}<p class="nota">{{ r.impuesto }}: {{ r.detalle }}</p>{% endif %}
         {% endfor %}
-
-        <form method="post" action="{{ url_for('confirmar') }}"
-              style="margin-top:18px; display:flex; gap:10px; align-items:center">
-          <input type="hidden" name="nombre" value="{{ nombre }}">
-          <input type="hidden" name="regimen" value="{{ regimen }}">
-          <input type="hidden" name="fecha_pago" value="{{ fecha_pago }}">
-          <input type="hidden" name="neto" value="{{ neto }}">
-          {% if servicio_caba %}<input type="hidden" name="servicio_caba" value="1">{% endif %}
-          {% for pt in partidas %}
-            <input type="hidden" name="reg_{{ pt.n }}" value="{{ pt.regimen or '' }}">
-          {% endfor %}
-          <button class="boton" type="submit">Confirmar y emitir certificados</button>
-          <a class="boton secundario" href="{{ url_for('bandeja') }}">Cancelar</a>
-        </form>
-        <p class="nota">Hasta que confirmes no se guarda nada.</p>
       </div>
-
       {% else %}
         <div class="vacio">Elegí un régimen de Ganancias para ver el cálculo.</div>
       {% endif %}
@@ -218,4 +235,32 @@
 
   </div>
 </div>
+</form>
+
+{% if calculo and calculo.retenciones %}
+<form method="post" action="{{ url_for('confirmar') }}"
+      style="margin-top:20px; display:flex; gap:10px; align-items:center; flex-wrap:wrap">
+  <input type="hidden" name="nombre" value="{{ nombre }}">
+  <input type="hidden" name="regimen" value="{{ regimen or '' }}">
+  <input type="hidden" name="fecha_pago" value="{{ fecha_pago }}">
+  <input type="hidden" name="neto" value="{{ neto }}">
+  <input type="hidden" name="rs" value="{{ f.emisor.razon_social or '' }}">
+  <input type="hidden" name="cuit" value="{{ f.emisor.cuit or '' }}">
+  <input type="hidden" name="dom" value="{{ f.emisor.domicilio or '' }}">
+  <input type="hidden" name="iibb" value="{{ f.emisor.ingresos_brutos or '' }}">
+  <input type="hidden" name="letra" value="{{ f.letra or '' }}">
+  <input type="hidden" name="pv" value="{{ f.punto_venta or '' }}">
+  <input type="hidden" name="nro" value="{{ f.numero or '' }}">
+  <input type="hidden" name="fecha_fc" value="{{ f.fecha or '' }}">
+  {% if servicio_caba %}<input type="hidden" name="servicio_caba" value="1">{% endif %}
+  {% for pt in partidas %}
+    <input type="hidden" name="reg_{{ pt.n }}" value="{{ pt.regimen or '' }}">
+    <input type="hidden" name="base_{{ pt.n }}" value="{{ pt.item.subtotal }}">
+  {% endfor %}
+  {% for c in apagados %}<input type="hidden" name="off_{{ c }}" value="1">{% endfor %}
+  <button class="boton" type="submit">Confirmar y emitir certificados</button>
+  <a class="boton secundario" href="{{ url_for('bandeja') }}">Cancelar</a>
+  <span class="nota" style="margin:0">Hasta que confirmes no se guarda nada.</span>
+</form>
+{% endif %}
 {% endblock %}

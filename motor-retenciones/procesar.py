@@ -109,16 +109,22 @@ def guardar(conn, f, calculo, fecha_pago, servicio_en_caba=False):
     for r in calculo["retenciones"]:
         imp = clave[r["impuesto"]]
         nro = None
-        if r["monto"] > 0 and imp in ("ganancias", "iibb_caba"):
+        if r["monto"] > 0 and r.get("activo") is not False and imp in ("ganancias", "iibb_caba"):
             nro = siguiente_certificado(conn, imp, fecha_pago[:4])
+        # una linea apagada a mano se guarda igual, en cero y con el motivo: es
+        # una decision que conviene que quede registrada
+        apagada = r.get("activo") is False
         conn.execute(
             "INSERT INTO retenciones (comprobante_id, impuesto, regimen, periodo, "
             "base_imponible, alicuota, monto, fecha_retencion, nro_certificado, "
-            "estado, origen) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+            "estado, motivo, origen) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
             (cid, imp, r["regimen"], fecha_pago[:7], r["base"],
              None if isinstance(r["alicuota"], str) else r["alicuota"],
              r["monto"], fecha_pago, nro,
-             "practicada" if r["monto"] > 0 else "no_practicada", f["archivo"]))
+             "practicada" if r["monto"] > 0 else "no_practicada",
+             (f"desactivada a mano (habria sido ${r.get('monto_original', 0):,.2f})"
+              if apagada else r.get("nota")),
+             f["archivo"]))
         if nro:
             emitidos.append((imp, nro))
     return cid, emitidos

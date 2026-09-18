@@ -4,3 +4,6 @@ agente.json
 certificados/
 padrones/
 entrada/
+procesadas/
+app.out
+app.err

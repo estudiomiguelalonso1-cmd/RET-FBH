@@ -22,8 +22,8 @@
           <input type="file" name="factura" id="archivo" accept="application/pdf" required>
           <div class="grande" id="rotulo">Arrastrá la factura acá o hacé clic para elegirla</div>
           <div class="nota" style="margin:0">
-            Factura electrónica de AFIP en PDF. Se lee el texto del archivo: no hay que
-            cargar nada a mano.
+            Factura electrónica de AFIP en PDF. Se lee el texto del archivo y después
+            podés corregir lo que haga falta.
           </div>
         </label>
         <div style="margin-top:14px">
@@ -36,17 +36,28 @@
   {% if pendientes %}
   <div class="panel">
     <div class="cab">
-      <h2>Facturas sin procesar</h2>
+      <h2>Sin procesar</h2>
       <span class="chip">{{ pendientes | length }}</span>
     </div>
     <div class="cuerpo ajustado">
       <table>
+        <thead><tr>
+          <th>Proveedor</th><th>Comprobante</th><th class="num">Neto</th><th></th>
+        </tr></thead>
         <tbody>
         {% for p in pendientes %}
           <tr>
-            <td>{{ p.name }}</td>
+            <td>
+              {{ p.proveedor or p.nombre }}
+              {% if p.ya_cargada %}<span class="chip">ya cargada</span>{% endif %}
+              {% if not p.proveedor %}
+                <span class="nota" style="display:block">No se pudo leer: revisala igual</span>
+              {% endif %}
+            </td>
+            <td style="white-space:nowrap">{{ p.comprobante or '—' }}</td>
+            <td class="num">{{ p.neto | plata if p.neto else '—' }}</td>
             <td class="num" style="width:110px">
-              <a href="{{ url_for('revisar', nombre=p.name) }}">Revisar →</a>
+              <a href="{{ url_for('revisar', nombre=p.nombre) }}">Revisar →</a>
             </td>
           </tr>
         {% endfor %}
@@ -57,7 +68,30 @@
   {% endif %}
 
   <div class="panel">
-    <div class="cab"><h2>Últimos comprobantes</h2></div>
+    <div class="cab">
+      <h2>Comprobantes</h2>
+      <form method="get" action="{{ url_for('bandeja') }}" id="fb"
+            style="margin-left:auto; display:flex; gap:8px; align-items:center; flex-wrap:wrap">
+        <input type="search" name="q" value="{{ filtro.q }}"
+               placeholder="Proveedor, CUIT o número"
+               style="width:230px; padding:6px 10px; font-size:13.5px">
+        <span class="nota" style="margin:0">Retención del</span>
+        <input type="date" name="desde" value="{{ filtro.desde }}"
+               style="width:145px; padding:6px 10px; font-size:13.5px">
+        <span class="nota" style="margin:0">al</span>
+        <input type="date" name="hasta" value="{{ filtro.hasta }}"
+               style="width:145px; padding:6px 10px; font-size:13.5px">
+        <button class="boton secundario" type="submit"
+                style="padding:6px 14px; font-size:13.5px">Filtrar</button>
+        {% if filtro.q or filtro.desde or filtro.hasta %}
+          <a class="boton secundario" href="{{ url_for('bandeja') }}"
+             style="padding:6px 14px; font-size:13.5px">Limpiar</a>
+        {% endif %}
+        <a class="boton" style="padding:6px 14px; font-size:13.5px"
+           href="{{ url_for('exportar', q=filtro.q, desde=filtro.desde, hasta=filtro.hasta) }}">
+          Bajar Excel</a>
+      </form>
+    </div>
     <div class="cuerpo ajustado">
       {% if recientes %}
       <table>
@@ -67,9 +101,11 @@
         </tr></thead>
         <tbody>
         {% for c in recientes %}
-          <tr>
+          <tr onclick="location='{{ url_for('comprobante', cid=c.id) }}'"
+              style="cursor:pointer">
             <td style="white-space:nowrap">{{ c.fecha or '—' }}</td>
-            <td>{{ c.razon_social }}</td>
+            <td>{{ c.razon_social }}
+              <span class="nota" style="display:block">{{ c.cuit }}</span></td>
             <td style="white-space:nowrap">{{ c.punto_venta or '' }}{% if c.numero %}-{{ c.numero }}{% endif %}</td>
             <td class="num">{{ c.neto | plata }}</td>
             <td class="num">{{ c.total_retenido | plata }}</td>
@@ -77,7 +113,13 @@
           </tr>
         {% endfor %}
         </tbody>
+        <tfoot>
+          <tr><td colspan="4">{{ recientes | length }} comprobantes</td>
+              <td class="num destacado">{{ total_filtrado | plata }}</td><td></td></tr>
+        </tfoot>
       </table>
+      {% elif filtro.q or filtro.desde or filtro.hasta %}
+      <div class="vacio">No hay comprobantes que coincidan con el filtro.</div>
       {% else %}
       <div class="vacio">Todavía no hay comprobantes cargados.</div>
       {% endif %}
