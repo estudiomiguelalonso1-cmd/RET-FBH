@@ -243,6 +243,12 @@
           </div>
           {% endif %}
         {% endfor %}
+        {% for e in errores %}
+          <div class="aviso malo"><span class="ico">!</span><span>{{ e }}</span></div>
+        {% endfor %}
+        {% for a in avisos_calculo %}
+          <div class="aviso"><span class="ico">!</span><span>{{ a }}</span></div>
+        {% endfor %}
         {% for a in calculo.avisos %}
           <div class="aviso"><span class="ico">!</span><span>{{ a }}</span></div>
         {% endfor %}
@@ -293,7 +299,10 @@
              value="{{ '%.2f'|format(r.alicuota * 100) }}">
     {% endif %}
   {% endfor %}
-  <button class="boton" type="submit">Confirmar y emitir certificados</button>
+  <button class="boton" type="submit" {% if errores %}disabled{% endif %}>
+    Confirmar y emitir certificados</button>
+  {% if errores %}<span class="nota" style="margin:0; color:var(--rojo)">
+    Corregí los errores marcados para poder confirmar.</span>{% endif %}
   <a class="boton secundario" href="{{ url_for('bandeja') }}">Cancelar</a>
 </form>
 {% endif %}

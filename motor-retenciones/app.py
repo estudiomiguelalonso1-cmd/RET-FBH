@@ -149,6 +149,39 @@ def aplicar_overrides(calculo, args):
     return calculo
 
 
+def controles_del_calculo(calculo, neto_factura):
+    """Revisa el calculo antes de dejar confirmar.
+
+    Los mismos controles que hacen AGIP y el propio archivo, pero acá, donde
+    todavia se pueden corregir. Devuelve (errores, avisos): con errores no se
+    deja confirmar, con avisos si.
+    """
+    errores, avisos = [], []
+    for r in calculo["retenciones"]:
+        if not r.get("activo", True):
+            continue
+        nombre = f"{r['impuesto']} {r['regimen']}"
+        base, monto = r["base"] or 0, r["monto"] or 0
+        alic = None if isinstance(r["alicuota"], str) else (r["alicuota"] or 0)
+
+        if base < 0:
+            errores.append(f"{nombre}: la base es negativa")
+        if monto < 0:
+            errores.append(f"{nombre}: el importe a retener es negativo")
+        if alic is not None and not (0 <= alic <= 0.9999):
+            errores.append(f"{nombre}: la alícuota {alic:.2%} está fuera de rango "
+                           f"(el campo de AGIP admite hasta 99,99 %)")
+        if monto > base + 0.01:
+            errores.append(f"{nombre}: se retiene más que la base")
+        if alic is not None and base and abs(base * alic - monto) > 0.01 and monto:
+            errores.append(f"{nombre}: base por alícuota da "
+                           f"${base * alic:,.2f} y el importe dice ${monto:,.2f}")
+        if base > (neto_factura or 0) + 0.01:
+            avisos.append(f"{nombre}: la base (${base:,.2f}) supera el neto de la "
+                          f"factura (${neto_factura or 0:,.2f})")
+    return errores, avisos
+
+
 def enlazar_facturas_previas(calculo):
     """Marca que facturas anteriores del desglose tienen su PDF disponible."""
     for r in calculo["retenciones"]:
@@ -393,6 +426,9 @@ def revisar(nombre):
                 iva_facturado=f["importes"]["iva"])
             calculo = aplicar_overrides(calculo, request.args)
             calculo = enlazar_facturas_previas(marcar_desactivados(calculo, apagados))
+            errores, avisos_calculo = controles_del_calculo(calculo, neto)
+        else:
+            errores, avisos_calculo = [], []
         regimenes = conn.execute(
             "SELECT cod_regimen, concepto FROM regimenes_ganancias "
             "WHERE situacion = 'I' AND tipo_persona = '' ORDER BY cod_regimen").fetchall()
@@ -403,7 +439,8 @@ def revisar(nombre):
             "revisar.html", nombre=nombre, f=f, avisos=avisos, proveedor=proveedor,
             regimen=regimen, regimenes=regimenes, fecha_pago=fecha_pago, neto=neto,
             calculo=calculo, ya_cargada=ya_cargada, servicio_caba=servicio_caba,
-            partidas=partidas, apagados=apagados,
+            partidas=partidas, apagados=apagados, errores=errores,
+            avisos_calculo=avisos_calculo,
             jurisdiccion=calcular.jurisdiccion_de(f["emisor"]["domicilio"]))
     finally:
         conn.close()
@@ -434,6 +471,12 @@ def confirmar():
             letra=f["letra"], sujeta_a_retencion=f["sujeta_a_retencion"],
             iva_facturado=f["importes"]["iva"])
         calculo = marcar_desactivados(aplicar_overrides(calculo, request.form), apagados)
+        errores, _ = controles_del_calculo(calculo, neto)
+        if errores:
+            conn.rollback()
+            return render_template(
+                "error.html", nombre=nombre,
+                detalle="No se guardó nada:\n\n  - " + "\n  - ".join(errores))
         cid, emitidos = procesar.guardar(conn, f, calculo, fecha_pago, servicio_caba)
         for _, nro in emitidos:
             certificados.emitir(conn, certificados.retenciones(conn, certificado=nro))
