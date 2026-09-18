@@ -17,18 +17,39 @@ Este repositorio automatiza el cálculo y la generación de los archivos de pres
 
 ## Estado
 
-El **motor de cálculo** está terminado y validado: reproduce al centavo 235 de las 238
-retenciones practicadas en 2026. Las tres que no coinciden son errores de la planilla,
-detallados en [`INFORME_VALIDACION.md`](motor-retenciones/INFORME_VALIDACION.md).
+El circuito funciona de punta a punta: se sube la factura, el sistema la lee, calcula
+las cuatro retenciones, y al confirmar guarda y emite los certificados.
+
+El **motor de cálculo** está validado: reproduce al centavo 235 de las 238 retenciones
+practicadas en 2026. Las tres que no coinciden son errores de la planilla, detallados
+en [`INFORME_VALIDACION.md`](motor-retenciones/INFORME_VALIDACION.md).
 
 Los **exportadores** de SICORE y e-ARCIBA generan los archivos de presentación con el
-layout oficial y se revalidan contra sus propias reglas.
+layout oficial y se revalidan contra sus propias reglas. **Todavía no se probaron
+importándolos en los aplicativos.**
 
-Todavía **no** hay carga de facturas, interfaz, ni generación de certificados PDF.
+Falta el **SIRE**, por donde se declaran las retenciones de IVA y de seguridad social.
+El sistema las calcula pero no las presenta ni emite su certificado.
 
 ## Cómo se usa
 
-Necesita Python 3.12 con `openpyxl`.
+Necesita Python 3.12 con `openpyxl`, `pymupdf`, `jinja2` y `flask`.
+
+### La aplicación
+
+```bash
+cd motor-retenciones
+python app.py          # y abrir http://127.0.0.1:5000
+```
+
+Se sube la factura y queda el panel doble: la factura a la izquierda, la propuesta
+editable a la derecha. Hasta que alguien confirma no se guarda nada; al confirmar se
+da de alta o se completa el proveedor con los datos de la factura, se guarda el
+comprobante y se emiten los certificados.
+
+Corre sólo en `127.0.0.1`: es una herramienta de escritorio, no un servidor expuesto.
+
+### Por línea de comandos
 
 ```bash
 cd motor-retenciones
@@ -56,6 +77,12 @@ python exportar_agip.py 2026-08              # archivo de importación a e-ARCIB
 | `exportar_agip.py` | Archivo de 226 caracteres para el e-ARCIBA |
 | `esquema.sql` | Modelo de datos (SQLite, portable a PostgreSQL) |
 | `migrar.py` | Carga el histórico 2026 en la base y concilia contra el Excel |
+| `leer_factura.py` | Lee una factura electrónica de AFIP: emisor, importes, domicilio y N° de IIBB |
+| `calcular.py` | Calcula las retenciones de una factura nueva, mirando el acumulado del mes |
+| `certificados.py` | Emite los certificados en PDF, con el layout de ARCA y de AGIP |
+| `procesar.py` | Encadena leer, calcular y certificar en un solo comando |
+| `padron_agip.py` | Descarga y carga el padrón mensual de AGIP |
+| `app.py` | La aplicación web local |
 
 ## Datos
 

@@ -1,0 +1,119 @@
+{% extends "base.html" %}
+{% block titulo %}Revisar factura — Retenciones{% endblock %}
+{% block cuerpo %}
+
+{% for a in avisos %}<div class="aviso">Lectura: {{ a }}</div>{% endfor %}
+{% if ya_cargada %}
+  <div class="aviso">Esta factura ya está cargada (comprobante #{{ ya_cargada.id }}).
+  Si confirmás de nuevo, se duplica.</div>
+{% endif %}
+{% if not proveedor %}
+  <div class="aviso">Proveedor nuevo: se va a dar de alta con los datos de la factura.
+  Elegí el régimen de Ganancias, porque no hay historial del que deducirlo.</div>
+{% endif %}
+
+<div class="doble">
+
+  <div class="panel">
+    <h2>Factura</h2>
+    <embed src="{{ url_for('factura_pdf', nombre=nombre) }}#toolbar=1" type="application/pdf">
+  </div>
+
+  <div>
+    <div class="panel" style="margin-bottom:18px">
+      <h2>Datos leídos</h2>
+      <dl class="dato">
+        <dt>Comprobante</dt><dd>{{ f.tipo }} {{ f.letra }} · {{ f.punto_venta }}-{{ f.numero }}</dd>
+        <dt>Fecha</dt><dd>{{ f.fecha }}</dd>
+        <dt>Proveedor</dt><dd>{{ f.emisor.razon_social }}</dd>
+        <dt>CUIT</dt><dd>{{ f.emisor.cuit }}</dd>
+        <dt>Domicilio</dt><dd>{{ f.emisor.domicilio or '—' }}</dd>
+        <dt>Ingresos Brutos</dt><dd>{{ f.emisor.ingresos_brutos or '—' }}</dd>
+        <dt>Neto gravado</dt><dd>{{ f.importes.neto_gravado | plata }}</dd>
+        <dt>IVA</dt><dd>{{ f.importes.iva | plata }}</dd>
+        <dt>Total</dt><dd>{{ f.importes.total | plata }}</dd>
+      </dl>
+    </div>
+
+    <div class="panel">
+      <h2>Retenciones a practicar</h2>
+
+      <form method="get" action="{{ url_for('revisar', nombre=nombre) }}">
+        <div class="fila">
+          <div>
+            <label for="regimen">Régimen de Ganancias</label>
+            <select name="regimen" id="regimen" onchange="this.form.submit()">
+              <option value="">— elegir —</option>
+              {% for r in regimenes %}
+                <option value="{{ r.cod_regimen }}" {% if regimen == r.cod_regimen %}selected{% endif %}>
+                  {{ r.cod_regimen }} — {{ r.concepto[:52] }}
+                </option>
+              {% endfor %}
+            </select>
+          </div>
+          <div>
+            <label for="fecha_pago">Fecha de pago</label>
+            <input type="date" name="fecha_pago" id="fecha_pago" value="{{ fecha_pago }}"
+                   onchange="this.form.submit()">
+          </div>
+          <div>
+            <label for="neto">Neto sujeto a retención</label>
+            <input type="number" step="0.01" name="neto" id="neto" value="{{ neto }}"
+                   onchange="this.form.submit()">
+          </div>
+        </div>
+      </form>
+
+      {% if calculo %}
+      <table>
+        <thead><tr>
+          <th>Impuesto</th><th>Rég.</th><th class="num">Base</th>
+          <th class="num">Alíc.</th><th class="num">A retener</th>
+        </tr></thead>
+        <tbody>
+        {% for r in calculo.retenciones %}
+          <tr>
+            <td>{{ r.impuesto }}</td>
+            <td>{{ r.regimen }}</td>
+            <td class="num">{{ r.base | plata }}</td>
+            <td class="num">
+              {% if r.alicuota is string %}{{ r.alicuota }}
+              {% else %}{{ '%.2f'|format(r.alicuota * 100) }}%{% endif %}
+            </td>
+            <td class="num">{{ r.monto | plata }}</td>
+          </tr>
+        {% endfor %}
+        </tbody>
+        <tfoot>
+          <tr><td colspan="4">Total a retener</td>
+              <td class="num">{{ calculo.total | plata }}</td></tr>
+          <tr><td colspan="4">Neto a pagar</td>
+              <td class="num">{{ calculo.a_pagar | plata }}</td></tr>
+        </tfoot>
+      </table>
+
+      <div style="margin-top:12px">
+        {% for r in calculo.retenciones %}
+          {% if r.detalle %}<p class="nota" style="margin:2px 0">{{ r.impuesto }}: {{ r.detalle }}</p>{% endif %}
+          {% if r.nota %}<p class="nota" style="margin:2px 0"><strong>{{ r.impuesto }}:</strong> {{ r.nota }}</p>{% endif %}
+        {% endfor %}
+        {% for a in calculo.avisos %}<div class="aviso" style="margin-top:10px">{{ a }}</div>{% endfor %}
+      </div>
+
+      <form method="post" action="{{ url_for('confirmar') }}" style="margin-top:18px">
+        <input type="hidden" name="nombre" value="{{ nombre }}">
+        <input type="hidden" name="regimen" value="{{ regimen }}">
+        <input type="hidden" name="fecha_pago" value="{{ fecha_pago }}">
+        <input type="hidden" name="neto" value="{{ neto }}">
+        <button type="submit">Confirmar y emitir certificados</button>
+        <a class="boton secundario" href="{{ url_for('bandeja') }}">Cancelar</a>
+      </form>
+      <p class="nota">Hasta que confirmes no se guarda nada.</p>
+
+      {% else %}
+        <p class="nota">Elegí un régimen de Ganancias para ver el cálculo.</p>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}

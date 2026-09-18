@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block titulo %}Retenciones{% endblock %}</title>
+<style>
+  :root {
+    --tinta: #16191d;
+    --tenue: #6b7280;
+    --borde: #dfe3e8;
+    --fondo: #f6f7f9;
+    --panel: #ffffff;
+    --acento: #1f5fbf;
+    --ok: #0f7b3e;
+    --aviso: #9a6400;
+    --aviso-fondo: #fff8e6;
+    --error: #b42318;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--fondo); color: var(--tinta);
+    font: 15px/1.5 "Segoe UI", system-ui, sans-serif;
+  }
+  header {
+    background: var(--panel); border-bottom: 1px solid var(--borde);
+    padding: 14px 24px; display: flex; align-items: baseline; gap: 16px;
+  }
+  header h1 { font-size: 17px; margin: 0; font-weight: 650; }
+  header .sub { color: var(--tenue); font-size: 13px; }
+  header a { color: var(--acento); text-decoration: none; font-size: 14px; }
+  main { padding: 22px 24px 60px; }
+  .ancho { max-width: 1180px; margin: 0 auto; }
+
+  h2 { font-size: 15px; margin: 0 0 12px; font-weight: 650; }
+  .panel {
+    background: var(--panel); border: 1px solid var(--borde);
+    border-radius: 8px; padding: 18px;
+  }
+  .doble { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; align-items: start; }
+  @media (max-width: 900px) { .doble { grid-template-columns: 1fr; } }
+
+  table { width: 100%; border-collapse: collapse; }
+  th, td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--borde); }
+  th { font-weight: 600; color: var(--tenue); font-size: 12.5px;
+       text-transform: uppercase; letter-spacing: .03em; }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+  tr:last-child td { border-bottom: none; }
+  tfoot td { font-weight: 650; border-top: 2px solid var(--tinta); border-bottom: none; }
+
+  .dato { display: grid; grid-template-columns: 150px 1fr; gap: 4px 12px; font-size: 14px; }
+  .dato dt { color: var(--tenue); }
+  .dato dd { margin: 0; }
+
+  label { display: block; font-size: 12.5px; color: var(--tenue); margin-bottom: 4px; }
+  input, select {
+    width: 100%; padding: 7px 9px; border: 1px solid var(--borde);
+    border-radius: 6px; font: inherit; background: #fff;
+  }
+  input:focus, select:focus { outline: 2px solid var(--acento); outline-offset: -1px; }
+  .fila { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 14px; }
+
+  button, .boton {
+    font: inherit; font-weight: 600; padding: 9px 18px; border-radius: 6px;
+    border: 1px solid var(--acento); background: var(--acento); color: #fff;
+    cursor: pointer; text-decoration: none; display: inline-block;
+  }
+  button.secundario, .boton.secundario {
+    background: #fff; color: var(--acento);
+  }
+  button:disabled { opacity: .5; cursor: not-allowed; }
+
+  .aviso {
+    background: var(--aviso-fondo); border: 1px solid #f0d9a0; color: var(--aviso);
+    padding: 10px 13px; border-radius: 6px; font-size: 13.5px; margin-bottom: 12px;
+  }
+  .nota { color: var(--tenue); font-size: 13px; }
+  .ok { color: var(--ok); }
+  .error { color: var(--error); }
+  embed, iframe { width: 100%; height: 620px; border: 1px solid var(--borde); border-radius: 6px; }
+  code { background: #eef0f3; padding: 1px 5px; border-radius: 4px; font-size: 13px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Retenciones</h1>
+  <span class="sub">Fiberhome Argentina S.A.</span>
+  <span style="flex:1"></span>
+  <a href="{{ url_for('bandeja') }}">Bandeja</a>
+</header>
+<main><div class="ancho">
+{% block cuerpo %}{% endblock %}
+</div></main>
+</body>
+</html>

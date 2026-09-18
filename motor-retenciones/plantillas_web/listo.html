@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block titulo %}Listo — Retenciones{% endblock %}
+{% block cuerpo %}
+<div class="panel">
+  <h2 class="ok">Comprobante #{{ cid }} guardado</h2>
+
+  {% for c in cambios %}<p class="nota">Proveedor: {{ c }}</p>{% endfor %}
+
+  <table style="margin-top:12px">
+    <thead><tr><th>Impuesto</th><th class="num">Retenido</th></tr></thead>
+    <tbody>
+    {% for r in calculo.retenciones %}
+      <tr><td>{{ r.impuesto }}</td><td class="num">{{ r.monto | plata }}</td></tr>
+    {% endfor %}
+    </tbody>
+    <tfoot><tr><td>Total</td><td class="num">{{ calculo.total | plata }}</td></tr></tfoot>
+  </table>
+
+  <h2 style="margin-top:22px">Certificados emitidos</h2>
+  {% if rutas %}
+  <table>
+    {% for r in rutas %}
+      <tr><td><a href="{{ url_for('certificado_pdf', nombre=r) }}" target="_blank">{{ r }}</a></td></tr>
+    {% endfor %}
+  </table>
+  {% else %}
+  <p class="nota">No correspondía emitir certificados.</p>
+  {% endif %}
+
+  <p class="nota" style="margin-top:18px">
+    Las retenciones de IVA y SUSS, si las hay, se declaran por SIRE y todavía se
+    cargan a mano.
+  </p>
+
+  <p style="margin-top:18px"><a class="boton" href="{{ url_for('bandeja') }}">Volver a la bandeja</a></p>
+</div>
+{% endblock %}

@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% block titulo %}Bandeja — Retenciones{% endblock %}
+{% block cuerpo %}
+
+{% for a in avisos %}<div class="aviso">{{ a }}</div>{% endfor %}
+
+<div class="panel" style="margin-bottom:18px">
+  <h2>Cargar una factura</h2>
+  <form method="post" action="{{ url_for('subir') }}" enctype="multipart/form-data"
+        style="display:flex; gap:12px; align-items:center">
+    <input type="file" name="factura" accept="application/pdf" required style="flex:1">
+    <button type="submit">Leer factura</button>
+  </form>
+  <p class="nota" style="margin-bottom:0">
+    Factura electrónica de AFIP en PDF. Se lee el texto del archivo: no hace falta
+    cargar nada a mano.
+  </p>
+</div>
+
+{% if pendientes %}
+<div class="panel" style="margin-bottom:18px">
+  <h2>Facturas sin procesar</h2>
+  <table>
+    {% for p in pendientes %}
+    <tr>
+      <td>{{ p.name }}</td>
+      <td class="num" style="width:120px">
+        <a href="{{ url_for('revisar', nombre=p.name) }}">Revisar</a>
+      </td>
+    </tr>
+    {% endfor %}
+  </table>
+</div>
+{% endif %}
+
+<div class="panel">
+  <h2>Últimos comprobantes</h2>
+  {% if recientes %}
+  <table>
+    <thead><tr>
+      <th>Fecha</th><th>Proveedor</th><th>Comprobante</th>
+      <th class="num">Neto</th><th class="num">Retenido</th><th class="num">Ret.</th>
+    </tr></thead>
+    <tbody>
+    {% for c in recientes %}
+      <tr>
+        <td>{{ c.fecha or '—' }}</td>
+        <td>{{ c.razon_social }}</td>
+        <td>{{ c.punto_venta or '' }}{% if c.numero %}-{{ c.numero }}{% endif %}</td>
+        <td class="num">{{ c.neto | plata }}</td>
+        <td class="num">{{ c.total_retenido | plata }}</td>
+        <td class="num">{{ c.retenciones }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="nota">Todavía no hay comprobantes cargados.</p>
+  {% endif %}
+</div>
+{% endblock %}

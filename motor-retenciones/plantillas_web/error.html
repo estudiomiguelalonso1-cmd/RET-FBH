@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block titulo %}Error — Retenciones{% endblock %}
+{% block cuerpo %}
+<div class="panel">
+  <h2 class="error">No se pudo procesar {{ nombre }}</h2>
+  <pre style="overflow:auto; font-size:12.5px; background:#f6f7f9; padding:12px;
+              border-radius:6px">{{ detalle }}</pre>
+  <p><a class="boton secundario" href="{{ url_for('bandeja') }}">Volver</a></p>
+</div>
+{% endblock %}
