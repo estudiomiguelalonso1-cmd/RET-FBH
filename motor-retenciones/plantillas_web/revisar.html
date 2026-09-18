@@ -219,7 +219,15 @@
               {% for d in r.desglose %}
                 <div style="display:contents" class="{{ 'fuerte' if d.fuerte }}">
                   <span class="signo">{{ d.signo }}</span>
-                  <dt>{{ d.concepto }}</dt>
+                  <dt>
+                    {% if d.comprobante_id %}
+                      <a href="{{ url_for('comprobante', cid=d.comprobante_id) }}">{{ d.concepto }}</a>
+                      {% if d.pdf %}
+                        <a href="{{ url_for('factura_pdf', nombre=d.pdf) }}" target="_blank"
+                           class="nota" style="margin-left:6px">ver PDF ↗</a>
+                      {% endif %}
+                    {% else %}{{ d.concepto }}{% endif %}
+                  </dt>
                   <dd>{{ d.importe | plata }}</dd>
                 </div>
               {% endfor %}

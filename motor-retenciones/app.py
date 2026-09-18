@@ -111,6 +111,15 @@ def desactivados_de(args):
     return {c for c in IMPUESTO_CLAVE.values() if args.get(f"off_{c}") == "1"}
 
 
+def enlazar_facturas_previas(calculo):
+    """Marca que facturas anteriores del desglose tienen su PDF disponible."""
+    for r in calculo["retenciones"]:
+        for d in (r.get("desglose") or []):
+            archivo = d.get("archivo")
+            d["pdf"] = buscar_pdf(archivo).name if archivo and buscar_pdf(archivo) else None
+    return calculo
+
+
 def marcar_desactivados(calculo, apagados):
     """Deja las lineas apagadas a la vista, en cero y con el motivo."""
     total = 0.0
@@ -344,7 +353,7 @@ def revisar(nombre):
                 neto_gravado=f["importes"]["neto_gravado"], partidas=partidas or None,
                 letra=f["letra"], sujeta_a_retencion=f["sujeta_a_retencion"],
                 iva_facturado=f["importes"]["iva"])
-            calculo = marcar_desactivados(calculo, apagados)
+            calculo = enlazar_facturas_previas(marcar_desactivados(calculo, apagados))
         regimenes = conn.execute(
             "SELECT cod_regimen, concepto FROM regimenes_ganancias "
             "WHERE situacion = 'I' AND tipo_persona = '' ORDER BY cod_regimen").fetchall()
