@@ -67,25 +67,60 @@ def consumido_del_minimo(conn, cuit, periodo, regimen, antes_de=None):
     return conn.execute(sql, args).fetchone()["n"]
 
 
-def alicuota_iibb(conn, cuit, fecha):
-    """Alicuota de retencion del padron AGIP vigente a esa fecha."""
-    fila = conn.execute(
+def _consultar(conn, cuit, fecha):
+    return conn.execute(
         "SELECT alic_retencion, vigencia_desde, vigencia_hasta FROM padron_iibb_caba "
         "WHERE cuit = ? AND vigencia_desde <= ? ORDER BY vigencia_desde DESC LIMIT 1",
         (cuit, fecha)).fetchone()
-    return fila
 
 
-def calcular(conn, cuit, neto, cod_regimen, fecha=None, antes_de=None):
+def alicuota_iibb(conn, cuit, fecha):
+    """Alicuota de retencion del padron AGIP vigente a esa fecha.
+
+    La base solo guarda los CUIT que ya son proveedores, porque el padron trae un
+    millon y medio de renglones. Si el CUIT no esta, se lo busca en el archivo
+    cacheado y se lo incorpora: es el caso de un proveedor nuevo.
+    """
+    fila = _consultar(conn, cuit, fecha)
+    if fila is not None:
+        return fila
+    try:
+        import padron_agip
+    except ImportError:
+        return None
+    for txt in sorted(padron_agip.CACHE.glob("*.TXT"), reverse=True):
+        p = padron_agip.buscar(txt, cuit)
+        if not p:
+            continue
+        conn.execute(
+            "INSERT OR REPLACE INTO padron_iibb_caba (cuit, vigencia_desde, "
+            "vigencia_hasta, publicacion, tipo_contr, alic_percepcion, "
+            "alic_retencion, razon_social) VALUES (?,?,?,?,?,?,?,?)",
+            (p[3], padron_agip.iso(p[1]), padron_agip.iso(p[2]),
+             padron_agip.iso(p[0]), p[4], float(p[7].replace(",", ".")) / 100,
+             float(p[8].replace(",", ".")) / 100, p[11].strip()))
+        conn.commit()
+        return _consultar(conn, cuit, fecha)
+    return None
+
+
+def calcular(conn, cuit, neto, cod_regimen, fecha=None, antes_de=None, proveedor_provisorio=None):
+    """Calcula las cuatro retenciones de un pago.
+
+    `proveedor_provisorio` permite cotizar una factura de un proveedor que todavia
+    no esta dado de alta, con los datos leidos de la propia factura.
+    """
     fecha = fecha or date.today().isoformat()
     periodo = fecha[:7]
-    p = proveedor(conn, cuit)
+    p = proveedor(conn, cuit) or proveedor_provisorio
     resultado = {"cuit": cuit, "fecha": fecha, "periodo": periodo, "neto": neto,
                  "proveedor": p["razon_social"] if p else None,
-                 "avisos": [], "retenciones": []}
+                 "avisos": [], "retenciones": [], "total": 0.0, "a_pagar": neto}
     if p is None:
         resultado["avisos"].append("el proveedor no existe en la base: hay que darlo de alta")
         return resultado
+    if proveedor(conn, cuit) is None:
+        resultado["avisos"].append("proveedor nuevo: se da de alta al confirmar")
 
     # --- Ganancias --------------------------------------------------------
     reg = parametros_regimen(conn, cod_regimen, p["situacion_ganancias"] or "I",

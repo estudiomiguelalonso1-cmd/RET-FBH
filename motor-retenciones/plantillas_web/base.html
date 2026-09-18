@@ -4,92 +4,176 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{% block titulo %}Retenciones{% endblock %}</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
-  :root {
-    --tinta: #16191d;
-    --tenue: #6b7280;
-    --borde: #dfe3e8;
-    --fondo: #f6f7f9;
-    --panel: #ffffff;
-    --acento: #1f5fbf;
-    --ok: #0f7b3e;
-    --aviso: #9a6400;
-    --aviso-fondo: #fff8e6;
-    --error: #b42318;
-  }
-  * { box-sizing: border-box; }
-  body {
-    margin: 0; background: var(--fondo); color: var(--tinta);
-    font: 15px/1.5 "Segoe UI", system-ui, sans-serif;
-  }
-  header {
-    background: var(--panel); border-bottom: 1px solid var(--borde);
-    padding: 14px 24px; display: flex; align-items: baseline; gap: 16px;
-  }
-  header h1 { font-size: 17px; margin: 0; font-weight: 650; }
-  header .sub { color: var(--tenue); font-size: 13px; }
-  header a { color: var(--acento); text-decoration: none; font-size: 14px; }
-  main { padding: 22px 24px 60px; }
-  .ancho { max-width: 1180px; margin: 0 auto; }
+:root{
+  --tinta:#0f1729; --tinta-2:#334155; --tenue:#64748b; --suave:#94a3b8;
+  --linea:#e6eaf0; --linea-fuerte:#cbd5e1;
+  --fondo:#f1f4f9; --panel:#fff;
+  --acento:#2563eb; --acento-osc:#1d4ed8; --acento-suave:#eff5ff;
+  --ok:#047857; --ok-suave:#ecfdf5;
+  --alerta:#b45309; --alerta-suave:#fffbeb; --alerta-linea:#fde4b0;
+  --rojo:#b91c1c; --rojo-suave:#fef2f2;
+  --sombra:0 1px 2px rgba(15,23,41,.05), 0 1px 3px rgba(15,23,41,.06);
+  --sombra-alta:0 4px 16px rgba(15,23,41,.08);
+  --radio:12px;
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{
+  margin:0; background:var(--fondo); color:var(--tinta);
+  font-family:Inter,"Segoe UI",system-ui,sans-serif;
+  font-size:14.5px; line-height:1.55; -webkit-font-smoothing:antialiased;
+}
+a{color:var(--acento); text-decoration:none}
+a:hover{text-decoration:underline}
 
-  h2 { font-size: 15px; margin: 0 0 12px; font-weight: 650; }
-  .panel {
-    background: var(--panel); border: 1px solid var(--borde);
-    border-radius: 8px; padding: 18px;
-  }
-  .doble { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; align-items: start; }
-  @media (max-width: 900px) { .doble { grid-template-columns: 1fr; } }
+/* ---------- barra superior ---------- */
+header{
+  background:var(--panel); border-bottom:1px solid var(--linea);
+  position:sticky; top:0; z-index:20;
+}
+.barra{
+  max-width:1280px; margin:0 auto; padding:0 24px; height:58px;
+  display:flex; align-items:center; gap:14px;
+}
+.marca{display:flex; align-items:center; gap:10px; font-weight:650; letter-spacing:-.01em}
+.marca .pin{
+  width:26px; height:26px; border-radius:8px; background:var(--acento);
+  color:#fff; display:grid; place-items:center; font-size:13px; font-weight:700;
+}
+.marca small{display:block; font-weight:450; color:var(--tenue); font-size:12px; line-height:1.1}
+.barra nav{margin-left:auto; display:flex; gap:4px}
+.barra nav a{
+  color:var(--tinta-2); padding:6px 12px; border-radius:8px; font-weight:500; font-size:13.5px;
+}
+.barra nav a:hover{background:var(--fondo); text-decoration:none}
 
-  table { width: 100%; border-collapse: collapse; }
-  th, td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--borde); }
-  th { font-weight: 600; color: var(--tenue); font-size: 12.5px;
-       text-transform: uppercase; letter-spacing: .03em; }
-  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
-  tr:last-child td { border-bottom: none; }
-  tfoot td { font-weight: 650; border-top: 2px solid var(--tinta); border-bottom: none; }
+main{max-width:1280px; margin:0 auto; padding:26px 24px 72px}
 
-  .dato { display: grid; grid-template-columns: 150px 1fr; gap: 4px 12px; font-size: 14px; }
-  .dato dt { color: var(--tenue); }
-  .dato dd { margin: 0; }
+/* ---------- encabezado de página ---------- */
+.titulo{display:flex; align-items:flex-end; gap:14px; margin-bottom:18px; flex-wrap:wrap}
+.titulo h1{font-size:21px; margin:0; font-weight:650; letter-spacing:-.02em}
+.titulo p{margin:0; color:var(--tenue); font-size:13.5px}
 
-  label { display: block; font-size: 12.5px; color: var(--tenue); margin-bottom: 4px; }
-  input, select {
-    width: 100%; padding: 7px 9px; border: 1px solid var(--borde);
-    border-radius: 6px; font: inherit; background: #fff;
-  }
-  input:focus, select:focus { outline: 2px solid var(--acento); outline-offset: -1px; }
-  .fila { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 14px; }
+/* ---------- tarjetas ---------- */
+.panel{
+  background:var(--panel); border:1px solid var(--linea);
+  border-radius:var(--radio); box-shadow:var(--sombra);
+}
+.panel > .cab{
+  padding:14px 18px; border-bottom:1px solid var(--linea);
+  display:flex; align-items:center; gap:10px;
+}
+.panel > .cab h2{font-size:13.5px; margin:0; font-weight:620; letter-spacing:-.005em}
+.panel > .cuerpo{padding:18px}
+.panel > .cuerpo.ajustado{padding:0}
 
-  button, .boton {
-    font: inherit; font-weight: 600; padding: 9px 18px; border-radius: 6px;
-    border: 1px solid var(--acento); background: var(--acento); color: #fff;
-    cursor: pointer; text-decoration: none; display: inline-block;
-  }
-  button.secundario, .boton.secundario {
-    background: #fff; color: var(--acento);
-  }
-  button:disabled { opacity: .5; cursor: not-allowed; }
+.doble{display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:20px; align-items:start}
+@media (max-width:1040px){.doble{grid-template-columns:1fr}}
+.apilado{display:grid; gap:20px}
 
-  .aviso {
-    background: var(--aviso-fondo); border: 1px solid #f0d9a0; color: var(--aviso);
-    padding: 10px 13px; border-radius: 6px; font-size: 13.5px; margin-bottom: 12px;
-  }
-  .nota { color: var(--tenue); font-size: 13px; }
-  .ok { color: var(--ok); }
-  .error { color: var(--error); }
-  embed, iframe { width: 100%; height: 620px; border: 1px solid var(--borde); border-radius: 6px; }
-  code { background: #eef0f3; padding: 1px 5px; border-radius: 4px; font-size: 13px; }
+/* ---------- tablas ---------- */
+table{width:100%; border-collapse:collapse; font-size:14px}
+thead th{
+  text-align:left; padding:9px 18px; color:var(--tenue);
+  font-size:11.5px; font-weight:600; text-transform:uppercase; letter-spacing:.055em;
+  background:#fafbfd; border-bottom:1px solid var(--linea); white-space:nowrap;
+}
+tbody td{padding:11px 18px; border-bottom:1px solid var(--linea)}
+tbody tr:last-child td{border-bottom:none}
+tbody tr:hover{background:#fafbfd}
+.num{text-align:right; font-variant-numeric:tabular-nums}
+tfoot td{
+  padding:11px 18px; font-weight:650; border-top:1px solid var(--linea-fuerte);
+  background:#fafbfd;
+}
+tfoot tr:first-child td{border-top:2px solid var(--tinta-2)}
+.destacado{font-size:16px}
+
+/* ---------- lista de datos ---------- */
+.dato{display:grid; grid-template-columns:132px minmax(0,1fr); gap:9px 16px; margin:0; font-size:13.8px}
+.dato dt{color:var(--tenue)}
+.dato dd{margin:0; word-break:break-word}
+.dato dd.mono{font-variant-numeric:tabular-nums; letter-spacing:.01em}
+
+/* ---------- formularios ---------- */
+label{display:block; font-size:12px; color:var(--tenue); margin-bottom:5px;
+      font-weight:550; letter-spacing:.01em}
+input,select{
+  width:100%; padding:8px 11px; border:1px solid var(--linea-fuerte);
+  border-radius:9px; font:inherit; font-size:14px; background:#fff; color:var(--tinta);
+  transition:border-color .12s, box-shadow .12s;
+}
+input:hover,select:hover{border-color:var(--suave)}
+input:focus,select:focus{
+  outline:none; border-color:var(--acento); box-shadow:0 0 0 3px var(--acento-suave);
+}
+.campos{display:grid; grid-template-columns:1.6fr 1fr 1fr; gap:14px}
+@media (max-width:640px){.campos{grid-template-columns:1fr}}
+
+/* ---------- botones ---------- */
+.boton{
+  font:inherit; font-size:14px; font-weight:600; padding:10px 18px; border-radius:9px;
+  border:1px solid transparent; background:var(--acento); color:#fff;
+  cursor:pointer; display:inline-flex; align-items:center; gap:8px; text-decoration:none;
+  transition:background .12s, box-shadow .12s;
+}
+.boton:hover{background:var(--acento-osc); text-decoration:none}
+.boton.secundario{background:#fff; color:var(--tinta-2); border-color:var(--linea-fuerte)}
+.boton.secundario:hover{background:var(--fondo)}
+.boton:disabled{opacity:.45; cursor:not-allowed}
+
+/* ---------- avisos ---------- */
+.aviso{
+  display:flex; gap:10px; align-items:flex-start;
+  background:var(--alerta-suave); border:1px solid var(--alerta-linea); color:var(--alerta);
+  padding:11px 14px; border-radius:10px; font-size:13.5px; margin-bottom:12px;
+}
+.aviso.info{background:var(--acento-suave); border-color:#d3e3fd; color:var(--acento-osc)}
+.aviso.malo{background:var(--rojo-suave); border-color:#fecaca; color:var(--rojo)}
+.aviso .ico{flex:none; font-weight:700; line-height:1.4}
+.aviso code{background:rgba(0,0,0,.05)}
+
+/* ---------- varios ---------- */
+.chip{
+  display:inline-block; padding:2px 9px; border-radius:999px; font-size:11.5px;
+  font-weight:600; background:var(--fondo); color:var(--tenue); border:1px solid var(--linea);
+}
+.chip.ok{background:var(--ok-suave); color:var(--ok); border-color:#a7f3d0}
+.chip.acento{background:var(--acento-suave); color:var(--acento-osc); border-color:#d3e3fd}
+.nota{color:var(--tenue); font-size:12.8px; margin:6px 0 0}
+.vacio{padding:34px 18px; text-align:center; color:var(--tenue); font-size:13.5px}
+code{background:#eef1f6; padding:1.5px 6px; border-radius:5px;
+     font-family:ui-monospace,Menlo,Consolas,monospace; font-size:12.5px}
+embed{width:100%; height:660px; border:none; border-radius:0 0 var(--radio) var(--radio);
+      display:block; background:#525659}
+hr{border:none; border-top:1px solid var(--linea); margin:16px 0}
+
+/* zona de carga */
+.soltar{
+  border:1.5px dashed var(--linea-fuerte); border-radius:11px; padding:26px 18px;
+  text-align:center; background:#fafbfd; transition:border-color .12s, background .12s;
+}
+.soltar.encima{border-color:var(--acento); background:var(--acento-suave)}
+.soltar input[type=file]{display:none}
+.soltar .grande{font-weight:600; font-size:15px; margin-bottom:3px}
 </style>
 </head>
 <body>
 <header>
-  <h1>Retenciones</h1>
-  <span class="sub">Fiberhome Argentina S.A.</span>
-  <span style="flex:1"></span>
-  <a href="{{ url_for('bandeja') }}">Bandeja</a>
+  <div class="barra">
+    <div class="marca">
+      <span class="pin">R</span>
+      <span>Retenciones<small>Fiberhome Argentina S.A.</small></span>
+    </div>
+    <nav><a href="{{ url_for('bandeja') }}">Bandeja</a></nav>
+  </div>
 </header>
-<main><div class="ancho">
+<main>
 {% block cuerpo %}{% endblock %}
-</div></main>
+</main>
 </body>
 </html>

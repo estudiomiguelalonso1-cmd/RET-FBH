@@ -1,10 +1,22 @@
 {% extends "base.html" %}
 {% block titulo %}Error — Retenciones{% endblock %}
 {% block cuerpo %}
+
+<div class="titulo">
+  <h1>No se pudo procesar la factura</h1>
+  <p>{{ nombre }}</p>
+</div>
+
 <div class="panel">
-  <h2 class="error">No se pudo procesar {{ nombre }}</h2>
-  <pre style="overflow:auto; font-size:12.5px; background:#f6f7f9; padding:12px;
-              border-radius:6px">{{ detalle }}</pre>
-  <p><a class="boton secundario" href="{{ url_for('bandeja') }}">Volver</a></p>
+  <div class="cab"><h2>Detalle técnico</h2></div>
+  <div class="cuerpo">
+    <div class="aviso malo"><span class="ico">!</span>
+      <span>Nada se guardó. Copiá este detalle si hace falta revisarlo.</span></div>
+    <pre style="overflow:auto; font-size:12.5px; background:#f6f8fb; padding:14px;
+                border-radius:10px; border:1px solid var(--linea); margin:0">{{ detalle }}</pre>
+    <p style="margin-top:16px">
+      <a class="boton secundario" href="{{ url_for('bandeja') }}">Volver a la bandeja</a>
+    </p>
+  </div>
 </div>
 {% endblock %}

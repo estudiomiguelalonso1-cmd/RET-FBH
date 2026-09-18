@@ -36,6 +36,15 @@ def conectar():
     return conn
 
 
+def provisorio(f):
+    """Proveedor armado con los datos de la factura, para poder cotizar antes del alta."""
+    cuit = f["emisor"]["cuit"] or ""
+    return {"razon_social": f["emisor"]["razon_social"],
+            "situacion_ganancias": "I",
+            "tipo_persona": "H" if cuit[:2] in ("20", "23", "24", "27") else "J",
+            "retiene_iva_3164": 0, "retiene_suss_1556": 0}
+
+
 def plata(v):
     return f"{v:,.2f}".replace(",", "\x00").replace(".", ",").replace("\x00", ".")
 
@@ -112,7 +121,8 @@ def revisar(nombre):
 
         calculo = None
         if regimen and neto:
-            calculo = calcular.calcular(conn, cuit, neto, regimen, fecha_pago)
+            calculo = calcular.calcular(conn, cuit, neto, regimen, fecha_pago,
+                                        proveedor_provisorio=provisorio(f))
         regimenes = conn.execute(
             "SELECT cod_regimen, concepto FROM regimenes_ganancias "
             "WHERE situacion = 'I' AND tipo_persona = '' ORDER BY cod_regimen").fetchall()
@@ -141,7 +151,8 @@ def confirmar():
     try:
         conn.execute("BEGIN")
         cambios, _ = procesar.sincronizar_proveedor(conn, f, True)
-        calculo = calcular.calcular(conn, f["emisor"]["cuit"], neto, regimen, fecha_pago)
+        calculo = calcular.calcular(conn, f["emisor"]["cuit"], neto, regimen, fecha_pago,
+                                    proveedor_provisorio=provisorio(f))
         cid, emitidos = procesar.guardar(conn, f, calculo, fecha_pago)
         rutas = []
         for _, nro in emitidos:

@@ -1,37 +1,60 @@
 {% extends "base.html" %}
 {% block titulo %}Listo — Retenciones{% endblock %}
 {% block cuerpo %}
-<div class="panel">
-  <h2 class="ok">Comprobante #{{ cid }} guardado</h2>
 
-  {% for c in cambios %}<p class="nota">Proveedor: {{ c }}</p>{% endfor %}
+<div class="titulo">
+  <h1>Retención practicada</h1>
+  <p>{{ calculo.proveedor }}</p>
+  <span class="chip ok">Comprobante #{{ cid }}</span>
+</div>
 
-  <table style="margin-top:12px">
-    <thead><tr><th>Impuesto</th><th class="num">Retenido</th></tr></thead>
-    <tbody>
-    {% for r in calculo.retenciones %}
-      <tr><td>{{ r.impuesto }}</td><td class="num">{{ r.monto | plata }}</td></tr>
-    {% endfor %}
-    </tbody>
-    <tfoot><tr><td>Total</td><td class="num">{{ calculo.total | plata }}</td></tr></tfoot>
-  </table>
+<div class="doble">
 
-  <h2 style="margin-top:22px">Certificados emitidos</h2>
-  {% if rutas %}
-  <table>
-    {% for r in rutas %}
-      <tr><td><a href="{{ url_for('certificado_pdf', nombre=r) }}" target="_blank">{{ r }}</a></td></tr>
-    {% endfor %}
-  </table>
-  {% else %}
-  <p class="nota">No correspondía emitir certificados.</p>
-  {% endif %}
+  <div class="panel">
+    <div class="cab"><h2>Resumen</h2></div>
+    <table>
+      <thead><tr><th>Impuesto</th><th class="num">Retenido</th></tr></thead>
+      <tbody>
+      {% for r in calculo.retenciones %}
+        <tr><td>{{ r.impuesto }}</td><td class="num">{{ r.monto | plata }}</td></tr>
+      {% endfor %}
+      </tbody>
+      <tfoot>
+        <tr><td>Total retenido</td><td class="num destacado">{{ calculo.total | plata }}</td></tr>
+        <tr><td>Neto a pagar</td><td class="num destacado">{{ calculo.a_pagar | plata }}</td></tr>
+      </tfoot>
+    </table>
+    {% if cambios %}
+    <div class="cuerpo">
+      {% for c in cambios %}<p class="nota">Proveedor: {{ c }}</p>{% endfor %}
+    </div>
+    {% endif %}
+  </div>
 
-  <p class="nota" style="margin-top:18px">
-    Las retenciones de IVA y SUSS, si las hay, se declaran por SIRE y todavía se
-    cargan a mano.
-  </p>
+  <div class="panel">
+    <div class="cab"><h2>Certificados</h2>
+      <span class="chip ok" style="margin-left:auto">{{ rutas | length }} emitidos</span>
+    </div>
+    {% if rutas %}
+    <table>
+      <tbody>
+      {% for r in rutas %}
+        <tr><td>
+          <a href="{{ url_for('certificado_pdf', nombre=r) }}" target="_blank">{{ r }}</a>
+        </td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <div class="vacio">No correspondía emitir certificados.</div>
+    {% endif %}
+    <div class="cuerpo">
+      <div class="aviso info"><span class="ico">i</span>
+        <span>Las retenciones de IVA y de seguridad social, si las hay, se declaran por
+        SIRE y todavía se cargan a mano.</span></div>
+      <a class="boton" href="{{ url_for('bandeja') }}">Volver a la bandeja</a>
+    </div>
+  </div>
 
-  <p style="margin-top:18px"><a class="boton" href="{{ url_for('bandeja') }}">Volver a la bandeja</a></p>
 </div>
 {% endblock %}
