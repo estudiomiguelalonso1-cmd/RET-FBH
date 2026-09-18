@@ -66,6 +66,13 @@ main{max-width:1280px; margin:0 auto; padding:26px 24px 72px}
 }
 .panel table{table-layout:auto}
 .acciones{width:1%; white-space:nowrap; text-align:right}
+/* una tabla mas ancha que su tarjeta scrollea, no se corta */
+.scroll-x{overflow-x:auto}
+.scroll-x table{min-width:max-content}
+/* dentro del panel doble el espacio es la mitad: celdas mas compactas */
+.compacta thead th{padding:9px 12px}
+.compacta tbody td{padding:10px 12px}
+.compacta tfoot td{padding:10px 12px}
 .panel > .cab{
   padding:14px 18px; border-bottom:1px solid var(--linea);
   display:flex; align-items:center; gap:10px;

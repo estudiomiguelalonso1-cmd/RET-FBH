@@ -264,8 +264,6 @@ def calcular(conn, cuit, neto, cod_regimen=None, fecha=None, antes_de=None,
     if p is None:
         resultado["avisos"].append("el proveedor no existe en la base: hay que darlo de alta")
         return resultado
-    if proveedor(conn, cuit) is None:
-        resultado["avisos"].append("proveedor nuevo: se da de alta al confirmar")
     partidas = partidas or ([{"base": neto, "regimen": cod_regimen}] if cod_regimen else [])
 
     # --- Ganancias --------------------------------------------------------

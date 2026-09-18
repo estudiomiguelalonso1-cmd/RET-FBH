@@ -120,9 +120,10 @@
         {% if partidas %}
         <div style="margin-top:16px">
           <label>Ítems de la factura</label>
-          <table style="border:1px solid var(--linea); border-radius:9px; overflow:hidden">
-            <thead><tr><th>Descripción</th><th class="num" style="width:135px">Importe</th>
-                       <th style="width:240px">Régimen</th></tr></thead>
+          <div class="scroll-x" style="border:1px solid var(--linea); border-radius:9px">
+          <table class="compacta">
+            <thead><tr><th>Descripción</th><th class="num" style="width:130px">Importe</th>
+                       <th style="width:220px">Régimen</th></tr></thead>
             <tbody>
             {% for pt in partidas %}
               <tr>
@@ -152,6 +153,7 @@
             {% endfor %}
             </tbody>
           </table>
+          </div>
         </div>
         {% endif %}
 
@@ -170,9 +172,10 @@
       </div>
 
       {% if calculo and calculo.retenciones %}
-      <table>
+      <div class="scroll-x">
+      <table class="compacta">
         <thead><tr>
-          <th style="width:76px">No retener</th>
+          <th>No retener</th>
           <th>Impuesto</th><th>Rég.</th><th class="num">Base</th>
           <th class="num">Alíc.</th><th class="num">A retener</th>
         </tr></thead>
@@ -205,6 +208,7 @@
               <td class="num destacado">{{ calculo.a_pagar | plata }}</td></tr>
         </tfoot>
       </table>
+      </div>
 
       <div class="cuerpo">
         {% for a in calculo.avisos %}
