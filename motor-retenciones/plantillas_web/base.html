@@ -62,7 +62,10 @@ main{max-width:1280px; margin:0 auto; padding:26px 24px 72px}
 .panel{
   background:var(--panel); border:1px solid var(--linea);
   border-radius:var(--radio); box-shadow:var(--sombra);
+  overflow:hidden;               /* que nada se escape de la tarjeta */
 }
+.panel table{table-layout:auto}
+.acciones{width:1%; white-space:nowrap; text-align:right}
 .panel > .cab{
   padding:14px 18px; border-bottom:1px solid var(--linea);
   display:flex; align-items:center; gap:10px;

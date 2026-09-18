@@ -43,6 +43,8 @@ app.config["MAX_CONTENT_LENGTH"] = 25 * 1024 * 1024
 # Clave estable de cada linea del calculo, para poder apagarla desde la pantalla.
 IMPUESTO_CLAVE = {"Ganancias": "ganancias", "IIBB CABA": "iibb_caba",
                   "IVA": "iva", "SUSS": "suss"}
+# y el camino inverso, para mostrar lo que sale de la base
+NOMBRE_IMPUESTO = {v: k for k, v in IMPUESTO_CLAVE.items()}
 
 
 def conectar():
@@ -152,7 +154,12 @@ def plata(v):
     return f"{v:,.2f}".replace(",", "\x00").replace(".", ",").replace("\x00", ".")
 
 
+def impuesto(clave):
+    return NOMBRE_IMPUESTO.get(clave, clave)
+
+
 app.jinja_env.filters["plata"] = plata
+app.jinja_env.filters["impuesto"] = impuesto
 
 
 # ------------------------------------------------------------------ bandeja
