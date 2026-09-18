@@ -27,7 +27,7 @@ from pathlib import Path
 import motor_caba
 from escala_anexo_viii import UNIDAD_2026, tramos
 from exportar_agip import SITUACION_IVA
-from exportar_sicore import nro_comprobante
+from exportar_sicore import fecha as fecha_ar, nro_comprobante
 
 DIR = Path(__file__).resolve().parent
 BASE = DIR.parent
@@ -132,6 +132,23 @@ def cargar_proveedores(conn, H):
 
 
 # ------------------------------------------------- comprobantes y retenciones
+def fecha_resuelta(crudo, referencia):
+    """ISO de la fecha de la factura, resolviendo los rangos.
+
+    Varias filas del Excel traen un rango en vez de una fecha porque agrupan
+    facturas de distintos dias ('26/02 - 28/02/2026'). Se toma la mas reciente,
+    igual que para elegir el numero de comprobante.
+    """
+    if (crudo or "")[:4].isdigit() and len(crudo) == 10:
+        return crudo
+    anio = int((referencia or "0000")[:4]) or None
+    ar, _ = fecha_ar(crudo, anio)
+    if not ar:
+        return None
+    d, m, a = ar.split("/")
+    return f"{a}-{m}-{d}"
+
+
 def clave(f):
     """Clave para reconocer que dos filas hablan de la misma factura."""
     nc, _ = nro_comprobante(f["nro_factura"])
@@ -161,7 +178,7 @@ def cargar_operaciones(conn, H):
             (f["cuit"], f.get("comp") or "FC", f.get("fc_tipo"),
              nc[:5] if nc else None, nc[5:] if nc else None, f["nro_factura"],
              1 if (nota and "agrupa" in nota) else 0,
-             f["fecha_factura"] if (f["fecha_factura"] or "")[:4].isdigit() else None,
+             fecha_resuelta(f["fecha_factura"], f["fecha_retencion"] or f["periodo"]),
              f["fecha_factura"], f.get("pzf"), f["monto_neto"],
              "USD" if f.get("fc_usd") else "ARS", origen, nota))
         comprobantes[k] = cur.lastrowid

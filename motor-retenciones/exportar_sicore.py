@@ -9,7 +9,8 @@ Uso:
     python exportar_sicore.py 2026-07
     python exportar_sicore.py 2026-07 --salida SICORE_202607.txt
 """
-import argparse, json, re
+import argparse
+import sqlite3, json, re
 from datetime import date
 from decimal import Decimal, ROUND_HALF_UP
 from pathlib import Path
@@ -184,61 +185,79 @@ def linea(*, cod_comprobante, fecha_comprobante, nro_comp, total_comprobante,
     return "".join(partes).ljust(LARGO_LINEA)
 
 
-def retenciones_del_periodo(H, periodo):
-    """Devuelve (lineas, avisos) para un periodo AAAA-MM."""
-    filas, avisos = [], []
-    for f in H["ganancias"]:
-        if f["periodo"] != periodo or f["anulada"]:
-            continue
-        if not f["retencion"]:
-            continue                                # no se practico retencion
-        base = {"fila": f["fila"], "cuit": f["cuit"], "razon_social": f["razon_social"],
-                "fecha_comprobante": f["fecha_factura"], "fecha_retencion": f["fecha_retencion"],
-                "nro_factura": f["nro_factura"], "neto": f["monto_neto"]}
-        filas.append({**base, "tributo": "ganancias", "regimen": str(f["regimen"]),
-                      "monto": f["retencion"]})
-        if f["ret_iva_966"]:
-            filas.append({**base, "tributo": "iva", "regimen": COD_REGIMEN_FIJO["iva"],
-                          "monto": f["ret_iva_966"]})
-        if f["ret_suss"]:
-            filas.append({**base, "tributo": "suss", "regimen": COD_REGIMEN_FIJO["suss"],
-                          "monto": f["ret_suss"]})
-    return filas, avisos
+def conectar():
+    db = DIR / "retenciones.db"
+    if not db.exists():
+        raise SystemExit(f"falta {db.name}: corre primero 'python migrar.py'")
+    conn = sqlite3.connect(db)
+    conn.row_factory = sqlite3.Row
+    return conn
 
 
-def generar(periodo, iva=IVA_POR_DEFECTO, criterio=IMPORTE_COMPROBANTE):
-    H = json.loads((DIR / "historico.json").read_text(encoding="utf-8"))
-    filas, avisos = retenciones_del_periodo(H, periodo)
-    lineas, sire, derivados = [], [], []
+def retenciones_del_periodo(conn, periodo):
+    """Las retenciones practicadas del periodo, leidas de la base.
+
+    Se toma solo lo practicado: las anuladas y las que quedaron en cero no van a
+    la presentacion. El IVA y el SUSS salen aparte, por SIRE.
+    """
+    return conn.execute(
+        "SELECT r.id, r.impuesto, r.regimen, r.monto, r.base_imponible, "
+        "       r.fecha_retencion, r.nro_certificado, "
+        "       c.id AS comprobante_id, c.punto_venta, c.numero, c.numero_crudo, "
+        "       c.fecha AS fecha_comprobante, c.fecha_cruda, c.neto, c.total, "
+        "       c.agrupa_varias, p.cuit, p.razon_social "
+        "FROM retenciones r "
+        "JOIN comprobantes c ON c.id = r.comprobante_id "
+        "JOIN proveedores p ON p.cuit = c.cuit "
+        "WHERE r.periodo = ? AND r.estado = 'practicada' AND r.monto > 0 "
+        "ORDER BY r.fecha_retencion, r.id", (periodo,)).fetchall()
+
+
+def generar(periodo, iva=IVA_POR_DEFECTO, criterio=IMPORTE_COMPROBANTE, conn=None):
+    propia = conn is None
+    conn = conn or conectar()
+    try:
+        filas = retenciones_del_periodo(conn, periodo)
+    finally:
+        if propia:
+            conn.close()
+
+    lineas, avisos, sire, derivados = [], [], [], []
     for r in filas:
-        cod_imp = COD_IMPUESTO[r["tributo"]]
-        if r["tributo"] in ("iva", "suss"):
+        etiqueta = f"comprobante #{r['comprobante_id']} ({r['razon_social']})"
+        if r["impuesto"] == "iibb_caba":
+            continue                            # va al archivo de e-ARCIBA
+        if r["impuesto"] in ("iva", "suss"):
             sire.append(r)                      # se declaran aparte, por SIRE
             continue
-        if cod_imp is None or r["regimen"] in (None, "None"):
-            avisos.append(f"fila {r['fila']}: falta el codigo de impuesto/regimen para "
-                          f"{r['tributo'].upper()} - linea omitida")
+        cod_imp = COD_IMPUESTO.get(r["impuesto"])
+        if cod_imp is None or not r["regimen"]:
+            avisos.append(f"{etiqueta}: falta el codigo de impuesto o de regimen "
+                          f"para {r['impuesto'].upper()} - linea omitida")
             continue
+        if not r["fecha_retencion"]:
+            avisos.append(f"{etiqueta}: sin fecha de retencion - linea omitida")
+            continue
+        if not r["fecha_comprobante"]:
+            avisos.append(f"{etiqueta}: la fecha de la factura no es una fecha "
+                          f"({r['fecha_cruda']!r}) - linea omitida")
+            continue
+        if not (r["punto_venta"] and r["numero"]):
+            avisos.append(f"{etiqueta}: no se pudo normalizar el numero de factura "
+                          f"({r['numero_crudo']!r}) - linea omitida")
+            continue
+        if r["agrupa_varias"]:
+            derivados.append(f"{etiqueta}: la factura agrupa varias "
+                             f"({r['numero_crudo']}); se declara "
+                             f"{r['punto_venta']}-{r['numero']}")
         fr, _ = fecha(r["fecha_retencion"])
-        anio = int(fr[-4:]) if fr else None
-        fc, nota_fecha = fecha(r["fecha_comprobante"], anio)
-        nc, nota_nro = nro_comprobante(r["nro_factura"])
-        if not fr:
-            avisos.append(f"fila {r['fila']}: sin fecha de retencion - linea omitida")
-            continue
-        if not fc:
-            avisos.append(f"fila {r['fila']}: {nota_fecha} - linea omitida")
-            continue
-        if not nc:
-            avisos.append(f"fila {r['fila']}: {nota_nro} - linea omitida")
-            continue
-        for n in (nota_nro, nota_fecha):
-            if n:
-                derivados.append(f"fila {r['fila']}: {n}")
+        fc, _ = fecha(r["fecha_comprobante"])
+        total = (r["total"] if criterio == "total" and r["total"]
+                 else (r["neto"] * (1 + iva) if criterio == "total" else r["neto"]))
         lineas.append(linea(
-            cod_comprobante=COD_COMPROBANTE, fecha_comprobante=fc, nro_comp=nc,
-            total_comprobante=r["neto"] * (1 + iva) if criterio == "total" else r["neto"],
-            cod_impuesto=cod_imp, cod_regimen=r["regimen"],
+            cod_comprobante=COD_COMPROBANTE, fecha_comprobante=fc,
+            nro_comp=f"{r['punto_venta']}{r['numero']}",
+            total_comprobante=total, cod_impuesto=cod_imp, cod_regimen=r["regimen"],
             base_calculo=r["neto"], fecha_retencion=fr,
             monto_retencion=r["monto"], cuit=r["cuit"]))
     return lineas, avisos, sire, derivados

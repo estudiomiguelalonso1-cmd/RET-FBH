@@ -20,6 +20,7 @@ Uso:
 import argparse
 import csv
 import json
+import sqlite3
 from decimal import Decimal, ROUND_HALF_UP
 from pathlib import Path
 
@@ -114,69 +115,89 @@ def linea(*, fecha_retencion, tipo_comprobante, letra, nro_comp, fecha_comproban
     return l
 
 
-def generar(periodo, proveedores=None, iva=0.0):
-    H = json.loads((DIR / "historico.json").read_text(encoding="utf-8"))
+def conectar():
+    db = DIR / "retenciones.db"
+    if not db.exists():
+        raise SystemExit(f"falta {db.name}: corre primero 'python migrar.py'")
+    conn = sqlite3.connect(db)
+    conn.row_factory = sqlite3.Row
+    return conn
+
+
+def generar(periodo, proveedores=None, iva=0.0, conn=None):
+    """Lineas del lote de e-ARCIBA para un periodo, leidas de la base."""
+    propia = conn is None
+    conn = conn or conectar()
+    try:
+        filas = conn.execute(
+            "SELECT r.id, r.regimen, r.monto, r.alicuota, r.fecha_retencion, "
+            "       r.nro_certificado, c.id AS comprobante_id, c.tipo, c.letra, "
+            "       c.punto_venta, c.numero, c.numero_crudo, c.agrupa_varias, "
+            "       c.fecha AS fecha_comprobante, c.fecha_cruda, c.neto, "
+            "       p.cuit, p.razon_social, p.situacion_ib, p.situacion_iva, "
+            "       p.nro_inscripcion_ib "
+            "FROM retenciones r "
+            "JOIN comprobantes c ON c.id = r.comprobante_id "
+            "JOIN proveedores p ON p.cuit = c.cuit "
+            "WHERE r.impuesto = 'iibb_caba' AND r.periodo = ? "
+            "  AND r.estado = 'practicada' AND r.monto > 0 "
+            "ORDER BY r.fecha_retencion, r.id", (periodo,)).fetchall()
+    finally:
+        if propia:
+            conn.close()
+
     maestros = cargar_proveedores(proveedores)
     lineas, avisos, derivados = [], [], []
-
-    filas = [f for f in H["caba"]
-             if f["periodo"] == periodo and not f["anulada"] and f["retencion"]]
-    filas.sort(key=lambda f: (f["fecha_retencion"] or "", f["fila"]))
-
-    for f in filas:
-        fr, _ = fecha(f["fecha_retencion"])
-        anio = int(fr[-4:]) if fr else None
-        fc, nota_fecha = fecha(f["fecha_factura"], anio)
-        nc, nota_nro = nro_comprobante(f["nro_factura"])
-        pad = motor_caba.parse_padron(f["padron_crudo"])
-        m = maestros.get(f["cuit"], {})
-
+    for r in filas:
+        m = maestros.get(r["cuit"], {})
+        etiqueta = f"comprobante #{r['comprobante_id']} ({r['razon_social']})"
         falta = []
-        if not fr:
+        if not r["fecha_retencion"]:
             falta.append("sin fecha de retencion")
-        if not fc:
-            falta.append(nota_fecha)
-        if not nc:
-            falta.append(nota_nro)
+        if not r["fecha_comprobante"]:
+            falta.append(f"la fecha de la factura no es una fecha ({r['fecha_cruda']!r})")
+        if not (r["punto_venta"] and r["numero"]):
+            falta.append(f"no se pudo normalizar el numero ({r['numero_crudo']!r})")
 
-        tipo_comp = TIPO_COMPROBANTE.get(f["comp"])
+        tipo_comp = TIPO_COMPROBANTE.get(r["tipo"] or "FC")
         if not tipo_comp:
-            falta.append(f"tipo de comprobante desconocido: {f['comp']!r}")
+            falta.append(f"tipo de comprobante desconocido: {r['tipo']!r}")
 
-        sit_iva = m.get("situacion_iva") or SITUACION_IVA.get(f["fc_tipo"])
+        sit_iva = m.get("situacion_iva") or r["situacion_iva"] or SITUACION_IVA.get(r["letra"])
         if not sit_iva:
-            falta.append(f"no se deduce la situacion frente al IVA de la letra {f['fc_tipo']!r}")
+            falta.append(f"no se deduce la situacion frente al IVA de la letra {r['letra']!r}")
 
-        sit_ib = m.get("situacion_ib") or (pad["situacion_ib"] if pad else None)
+        sit_ib = m.get("situacion_ib") or r["situacion_ib"]
         if not sit_ib:
-            falta.append("falta la situacion IB (la fila no tiene renglon de padron)")
+            falta.append("falta la situacion IB del proveedor")
 
-        # Nro de inscripcion en IIBB: para Convenio Multilateral es el propio CUIT.
-        # Para los contribuyentes locales es un numero de 8 digitos + 2 verificadores
-        # que el Excel no guarda: hay que cargarlo una sola vez por proveedor.
-        nro_ib = m.get("nro_inscripcion_ib") or ""
+        # Convenio Multilateral usa el propio CUIT; los locales, un numero propio.
+        nro_ib = m.get("nro_inscripcion_ib") or r["nro_inscripcion_ib"] or ""
         if not nro_ib and sit_ib == "2":
-            nro_ib = f["cuit"]
+            nro_ib = r["cuit"]
         if not nro_ib:
             falta.append("falta el N de inscripcion en IIBB (contribuyente local)")
 
         if falta:
-            avisos.append((f, falta))
+            avisos.append((etiqueta, falta))
             continue
-        for n in (nota_nro, nota_fecha):
-            if n:
-                derivados.append(f"fila {f['fila']}: {n}")
+        if r["agrupa_varias"]:
+            derivados.append(f"{etiqueta}: la factura agrupa varias "
+                             f"({r['numero_crudo']}); se declara "
+                             f"{r['punto_venta']}-{r['numero']}")
 
-        neto = f["monto_neto"]
+        fr, _ = fecha(r["fecha_retencion"])
+        fc, _ = fecha(r["fecha_comprobante"])
+        neto = r["neto"]
         importe_iva = neto * iva
         lineas.append(linea(
-            fecha_retencion=fr, tipo_comprobante=tipo_comp, letra=f["fc_tipo"],
-            nro_comp=nc, fecha_comprobante=fc,
-            monto_comprobante=neto + importe_iva, nro_certificado=f["nro_certificado"],
-            cuit=f["cuit"], situacion_ib=sit_ib, nro_inscripcion_ib=nro_ib,
-            situacion_iva=sit_iva, razon_social=f["razon_social"],
+            fecha_retencion=fr, tipo_comprobante=tipo_comp, letra=r["letra"] or "A",
+            nro_comp=f"{r['punto_venta']}{r['numero']}", fecha_comprobante=fc,
+            monto_comprobante=neto + importe_iva, nro_certificado=r["nro_certificado"],
+            cuit=r["cuit"], situacion_ib=sit_ib, nro_inscripcion_ib=nro_ib,
+            situacion_iva=sit_iva, razon_social=r["razon_social"],
             otros_conceptos=0.0, importe_iva=importe_iva, monto_sujeto=neto,
-            alicuota=(f["alicuota"] or 0) * 100, retencion=f["retencion"]))
+            alicuota=(r["alicuota"] or 0) * 100, retencion=r["monto"]))
     return lineas, avisos, derivados
 
 
@@ -209,27 +230,24 @@ def plantilla_proveedores(ruta):
     El N de inscripcion en IIBB de los contribuyentes locales no esta en ningun lado
     del Excel y AGIP lo exige. Es un dato estable: se carga una vez por proveedor.
     """
-    H = json.loads((DIR / "historico.json").read_text(encoding="utf-8"))
-    prov = {}
-    for f in H["caba"]:
-        if not f["cuit"]:
-            continue
-        pad = motor_caba.parse_padron(f["padron_crudo"])
-        sit_ib = pad["situacion_ib"] if pad else ""
-        r = prov.setdefault(f["cuit"], {
-            "cuit": f["cuit"], "razon_social": f["razon_social"] or "",
-            "situacion_ib": sit_ib or "",
-            "situacion_iva": SITUACION_IVA.get(f["fc_tipo"], ""),
-            "nro_inscripcion_ib": "", "retenciones": 0,
-        })
-        r["retenciones"] += 1
-        if sit_ib and not r["situacion_ib"]:
-            r["situacion_ib"] = sit_ib
+    conn = conectar()
+    try:
+        filas = [dict(x) for x in conn.execute(
+            "SELECT p.cuit, p.razon_social, "
+            "       COALESCE(p.situacion_ib, '') AS situacion_ib, "
+            "       COALESCE(p.nro_inscripcion_ib, '') AS nro_inscripcion_ib, "
+            "       COALESCE(p.situacion_iva, '') AS situacion_iva, "
+            "       COUNT(r.id) AS retenciones "
+            "FROM proveedores p "
+            "JOIN comprobantes c ON c.cuit = p.cuit "
+            "JOIN retenciones r ON r.comprobante_id = c.id AND r.impuesto = 'iibb_caba' "
+            "GROUP BY p.cuit ORDER BY retenciones DESC")]
+    finally:
+        conn.close()
+    for r in filas:
         # Convenio Multilateral: el numero de inscripcion es el propio CUIT
-        if r["situacion_ib"] == "2":
-            r["nro_inscripcion_ib"] = f["cuit"]
-
-    filas = sorted(prov.values(), key=lambda r: -r["retenciones"])
+        if r["situacion_ib"] == "2" and not r["nro_inscripcion_ib"]:
+            r["nro_inscripcion_ib"] = r["cuit"]
     campos = ["cuit", "razon_social", "situacion_ib", "nro_inscripcion_ib",
               "situacion_iva", "retenciones"]
     with open(ruta, "w", encoding="utf-8-sig", newline="") as fh:
@@ -284,9 +302,8 @@ def main():
     if avisos:
         print()
         print(f"NO EXPORTADAS ({len(avisos)}):")
-        for f, motivos in avisos:
-            print(f"   fila {f['fila']:>4} {(f['razon_social'] or '')[:26]:26} "
-                  f"{'; '.join(motivos)}")
+        for etiqueta, motivos in avisos:
+            print(f"   {etiqueta}: {'; '.join(motivos)}")
 
 
 if __name__ == "__main__":
