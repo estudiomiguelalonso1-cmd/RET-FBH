@@ -50,7 +50,7 @@ DATOS_VACIOS = {
 
 
 def slug_de(nombre):
-    """'AB Fiduciaria' -> 'ab-fiduciaria'"""
+    """'Estudio Pérez S.A.' -> 'estudio-perez-s-a'"""
     t = unicodedata.normalize("NFKD", nombre)
     t = "".join(c for c in t if not unicodedata.combining(c)).lower()
     return re.sub(r"[^a-z0-9]+", "-", t).strip("-")
