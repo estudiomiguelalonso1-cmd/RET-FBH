@@ -2,37 +2,98 @@
 {% block titulo %}Clientes — Retenciones{% endblock %}
 {% block cuerpo %}
 
-<div class="titulo">
-  <h1>Clientes</h1>
-  <p>Elegí con qué cliente trabajar.</p>
-</div>
-
-<div class="clientes">
-  {% for x in filas %}
-  <a class="panel tarjeta-cliente" href="{{ url_for('bandeja', cliente=x.c.slug) }}">
-    <h2>{{ x.c.nombre }}</h2>
-    <div class="rs">{{ x.c.datos().razon_social or '' }}</div>
-    <div class="cifras">
-      <span><strong>{{ x.r.comprobantes }}</strong>comprobantes</span>
-      <span><strong>{{ x.r.retenciones }}</strong>retenciones</span>
-      {% if x.r.pendientes %}<span><strong>{{ x.r.pendientes }}</strong>pendientes</span>{% endif %}
+{% macro tarjeta(x, archivado=False) %}
+<div class="cli{{ ' archivado' if archivado }}" data-buscar="{{ (x.c.nombre ~ ' ' ~ (x.d.razon_social or '') ~ ' ' ~ (x.d.cuit or '')) | lower }}">
+  <a class="cli-link" href="{{ url_for('bandeja', cliente=x.c.slug) }}">
+    <div class="cli-cab">
+      <span class="avatar">{{ x.c.nombre[:1] | upper }}</span>
+      <div class="cli-id">
+        <h2>{{ x.c.nombre }}</h2>
+        <div class="rs">
+          {% if x.d.razon_social %}{{ x.d.razon_social }}{% else %}<span class="sin">Sin razón social</span>{% endif %}
+          {% if x.d.cuit %} · {{ x.d.cuit[:2] }}-{{ x.d.cuit[2:10] }}-{{ x.d.cuit[10:] }}{% endif %}
+        </div>
+      </div>
     </div>
-    <div class="chips">
-      {% if 'iibb_caba' in x.c.agente_de() %}<span class="chip acento">Agente IIBB CABA</span>{% endif %}
-      {% if x.falta %}<span class="chip alerta">Falta {{ x.falta | join(', ') }}</span>{% endif %}
+    <div class="cli-cifras">
+      <div><strong>{{ x.r.comprobantes }}</strong><span>comprobantes</span></div>
+      <div><strong>{{ x.r.retenciones }}</strong><span>retenciones</span></div>
+      <div class="{{ 'hay' if x.r.pendientes }}"><strong>{{ x.r.pendientes }}</strong><span>pendientes</span></div>
     </div>
   </a>
-  {% endfor %}
-</div>
-
-<div class="panel" style="margin-top:20px; max-width:520px">
-  <div class="cab"><h2>Nuevo cliente</h2></div>
-  <div class="cuerpo">
-    <form method="post" action="{{ url_for('nuevo_cliente') }}" style="display:flex; gap:10px">
-      <input name="nombre" placeholder="Nombre" required>
-      <button class="boton">Crear</button>
-    </form>
+  <div class="cli-pie">
+    <div class="chips">
+      {% if x.iibb %}<span class="chip acento">Agente IIBB CABA</span>{% endif %}
+      {% if x.falta %}<span class="chip alerta" title="Falta {{ x.falta | join(', ') }}. Sin estos datos no se emiten certificados.">Faltan datos</span>
+      {% elif not x.iibb %}<span class="chip ok">Listo</span>{% endif %}
+    </div>
+    <div class="cli-acciones">
+      {% if archivado %}
+      <form method="post" action="{{ url_for('desarchivar_cliente', cliente=x.c.slug) }}">
+        <button class="mini">Desarchivar</button></form>
+      {% else %}
+      <a class="mini" href="{{ url_for('datos_cliente', cliente=x.c.slug) }}">Datos</a>
+      <form method="post" action="{{ url_for('archivar_cliente', cliente=x.c.slug) }}"
+            onsubmit="return confirm('¿Archivar {{ x.c.nombre }}? No se borra nada: deja de aparecer en la lista y se puede desarchivar.')">
+        <button class="mini">Archivar</button></form>
+      {% endif %}
+    </div>
   </div>
 </div>
+{% endmacro %}
+
+<div class="titulo">
+  <div>
+    <h1>Clientes</h1>
+    <p>{{ activos | length }} activos{% if archivados %} · {{ archivados | length }} archivados{% endif %}</p>
+  </div>
+  <div class="titulo-der">
+    <input id="buscar" type="search" placeholder="Buscar por nombre, razón social o CUIT" autocomplete="off">
+    <button class="boton" type="button" onclick="document.getElementById('alta').showModal()">+ Nuevo cliente</button>
+  </div>
+</div>
+
+<div class="clientes" id="activos">
+  {% for x in activos %}{{ tarjeta(x) }}{% endfor %}
+</div>
+<p class="vacio" id="nada" hidden>Ningún cliente coincide con la búsqueda.</p>
+
+{% if archivados %}
+<details class="archivo">
+  <summary>Archivados ({{ archivados | length }})</summary>
+  <div class="clientes">
+    {% for x in archivados %}{{ tarjeta(x, True) }}{% endfor %}
+  </div>
+</details>
+{% endif %}
+
+<dialog id="alta" class="modal">
+  <form method="post" action="{{ url_for('nuevo_cliente') }}">
+    <h2>Nuevo cliente</h2>
+    <p class="nota" style="margin:0 0 14px">Después vas a poder cargar razón social, CUIT y domicilio.</p>
+    <label>Nombre</label>
+    <input name="nombre" required autofocus>
+    <div class="modal-botones">
+      <button type="button" class="boton secundario" onclick="this.closest('dialog').close()">Cancelar</button>
+      <button class="boton">Crear</button>
+    </div>
+  </form>
+</dialog>
+
+<script>
+const q = document.getElementById('buscar');
+q.addEventListener('input', () => {
+  const t = q.value.trim().toLowerCase();
+  let vis = 0;
+  document.querySelectorAll('#activos .cli').forEach(el => {
+    const ok = !t || el.dataset.buscar.includes(t);
+    el.hidden = !ok; if (ok) vis++;
+  });
+  document.querySelectorAll('.archivo .cli').forEach(el => {
+    el.hidden = t && !el.dataset.buscar.includes(t);
+  });
+  document.getElementById('nada').hidden = vis > 0 || !t;
+});
+</script>
 
 {% endblock %}

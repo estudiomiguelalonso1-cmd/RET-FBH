@@ -102,6 +102,16 @@ class Cliente:
         conf = {**AGENTE_POR_DEFECTO, **(self.datos().get("agente_de") or {})}
         return {k for k, v in conf.items() if v}
 
+    @property
+    def archivado(self):
+        return bool(self.datos().get("archivado"))
+
+    def archivar(self, si=True):
+        """Archivar no borra nada: solo lo saca de la lista principal."""
+        d = self.datos()
+        d["archivado"] = si
+        self.guardar_datos(d)
+
     def faltantes(self):
         """Lo que falta cargar para poder emitir certificados."""
         d = self.datos()

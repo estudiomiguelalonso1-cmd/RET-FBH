@@ -47,4 +47,12 @@
   </div>
 </form>
 
+{% if not cliente.archivado %}
+<form method="post" action="{{ url_for('archivar_cliente') }}" style="margin-top:14px"
+      onsubmit="return confirm('¿Archivar {{ cliente.nombre }}? No se borra nada y se puede desarchivar.')">
+  <button class="boton secundario">Archivar cliente</button>
+  <span class="nota">Deja de aparecer en la lista de clientes. No borra nada.</span>
+</form>
+{% endif %}
+
 {% endblock %}

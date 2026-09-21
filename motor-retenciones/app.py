@@ -265,8 +265,23 @@ app.jinja_env.filters["impuesto"] = impuesto
 # ------------------------------------------------------------------ panel
 @app.route("/")
 def panel():
-    filas = [{"c": c, "r": c.resumen(), "falta": c.faltantes()} for c in clientes.listar()]
-    return render_template("panel.html", filas=filas)
+    filas = [{"c": c, "d": c.datos(), "r": c.resumen(), "falta": c.faltantes(),
+              "iibb": "iibb_caba" in c.agente_de()} for c in clientes.listar()]
+    activos = [x for x in filas if not x["d"].get("archivado")]
+    archivados = [x for x in filas if x["d"].get("archivado")]
+    return render_template("panel.html", activos=activos, archivados=archivados)
+
+
+@app.route("/c/<cliente>/archivar", methods=["POST"])
+def archivar_cliente():
+    g.cliente.archivar(True)
+    return redirect(url_for("panel"))
+
+
+@app.route("/c/<cliente>/desarchivar", methods=["POST"])
+def desarchivar_cliente():
+    g.cliente.archivar(False)
+    return redirect(request.form.get("volver") or url_for("panel"))
 
 
 @app.route("/nuevo", methods=["POST"])
