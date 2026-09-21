@@ -15,6 +15,8 @@ from datetime import date
 from decimal import Decimal, ROUND_HALF_UP
 from pathlib import Path
 
+import clientes
+
 DIR = Path(__file__).resolve().parent
 
 LARGO_LINEA = 198
@@ -185,13 +187,7 @@ def linea(*, cod_comprobante, fecha_comprobante, nro_comp, total_comprobante,
     return "".join(partes).ljust(LARGO_LINEA)
 
 
-def conectar():
-    db = DIR / "retenciones.db"
-    if not db.exists():
-        raise SystemExit(f"falta {db.name}: corre primero 'python migrar.py'")
-    conn = sqlite3.connect(db)
-    conn.row_factory = sqlite3.Row
-    return conn
+
 
 
 def retenciones_del_periodo(conn, periodo):
@@ -213,14 +209,8 @@ def retenciones_del_periodo(conn, periodo):
         "ORDER BY r.fecha_retencion, r.id", (periodo,)).fetchall()
 
 
-def generar(periodo, iva=IVA_POR_DEFECTO, criterio=IMPORTE_COMPROBANTE, conn=None):
-    propia = conn is None
-    conn = conn or conectar()
-    try:
-        filas = retenciones_del_periodo(conn, periodo)
-    finally:
-        if propia:
-            conn.close()
+def generar(periodo, iva=IVA_POR_DEFECTO, criterio=IMPORTE_COMPROBANTE, *, conn):
+    filas = retenciones_del_periodo(conn, periodo)
 
     lineas, avisos, sire, derivados = [], [], [], []
     for r in filas:
@@ -271,10 +261,17 @@ def main():
                     help="alicuota de IVA, solo si --importe total")
     ap.add_argument("--importe", choices=("neto", "total"), default=IMPORTE_COMPROBANTE,
                     help="que declarar en 'importe del comprobante' (por defecto: neto)")
+    clientes.agregar_argumento(ap)
     args = ap.parse_args()
+    cliente = clientes.del_argumento(args)
 
-    lineas, avisos, sire, derivados = generar(args.periodo, args.iva, args.importe)
-    salida = Path(args.salida or DIR / f"SICORE_{args.periodo.replace('-', '')}.txt")
+    conn = cliente.conectar()
+    try:
+        lineas, avisos, sire, derivados = generar(args.periodo, args.iva, args.importe,
+                                                  conn=conn)
+    finally:
+        conn.close()
+    salida = Path(args.salida or cliente.carpeta / f"SICORE_{args.periodo.replace('-', '')}.txt")
     salida.write_text("\r\n".join(lineas) + "\r\n", encoding="latin-1")
 
     print(f"periodo {args.periodo}: {len(lineas)} lineas -> {salida.name}")

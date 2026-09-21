@@ -18,6 +18,7 @@ Notas de por que esta hecho asi:
     cambia casi todos los meses, asi que hay que leer la pagina igual.
   * El archivo es un RAR4 de unos 20 MB que descomprime a un TXT de unos 130 MB.
     Se usa el tar.exe de Windows, que trae libarchive y lee RAR sin instalar nada.
+  * Se carga en la base de cada cliente que sea agente de IIBB CABA.
   * Por defecto solo se cargan a la base los CUIT que ya son proveedores: son
     decenas contra el millon y medio de renglones que trae el padron. El TXT queda
     cacheado para poder buscar cualquier otro CUIT cuando aparezca.
@@ -31,9 +32,10 @@ import subprocess
 import urllib.request
 from pathlib import Path
 
+import clientes
+
 DIR = Path(__file__).resolve().parent
 CACHE = DIR / "padrones"
-DB = DIR / "retenciones.db"
 
 API = "https://www.agip.gob.ar/api/pages/byPath"
 PAGINA = ("/agentes/agentes-de-recaudacion/ib-agentes-recaudacion/padrones/"
@@ -177,17 +179,17 @@ def main():
             print(f"   alicuota retencion {p[8]} %   percepcion {p[7]} %")
         return
 
-    conn = sqlite3.connect(DB)
-    try:
-        leidos, cargados = cargar(txt, conn, args.todos)
-        print(f"{leidos:,} renglones leidos, {cargados:,} cargados a la base"
-              f"{'' if args.todos else ' (solo proveedores conocidos)'}")
-        for periodo, n in conn.execute(
-                "SELECT substr(vigencia_desde,1,7), COUNT(*) FROM padron_iibb_caba "
-                "GROUP BY 1 ORDER BY 1 DESC LIMIT 6"):
-            print(f"   en la base: {periodo}  {n} CUIT")
-    finally:
-        conn.close()
+    agentes = [c for c in clientes.listar() if "iibb_caba" in c.agente_de()]
+    if not agentes:
+        print("ningun cliente es agente de IIBB CABA: no se carga en ninguna base")
+    for cliente in agentes:
+        conn = cliente.conectar()
+        try:
+            leidos, cargados = cargar(txt, conn, args.todos)
+            print(f"{cliente.nombre}: {leidos:,} renglones leidos, {cargados:,} cargados"
+                  f"{'' if args.todos else ' (solo proveedores conocidos)'}")
+        finally:
+            conn.close()
 
 
 if __name__ == "__main__":

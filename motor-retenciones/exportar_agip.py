@@ -24,6 +24,8 @@ import sqlite3
 from decimal import Decimal, ROUND_HALF_UP
 from pathlib import Path
 
+import clientes
+
 import motor_caba
 from exportar_sicore import fecha, nro_comprobante
 
@@ -115,37 +117,25 @@ def linea(*, fecha_retencion, tipo_comprobante, letra, nro_comp, fecha_comproban
     return l
 
 
-def conectar():
-    db = DIR / "retenciones.db"
-    if not db.exists():
-        raise SystemExit(f"falta {db.name}: corre primero 'python migrar.py'")
-    conn = sqlite3.connect(db)
-    conn.row_factory = sqlite3.Row
-    return conn
 
 
-def generar(periodo, proveedores=None, iva=0.0, conn=None):
+
+def generar(periodo, proveedores=None, iva=0.0, *, conn):
     """Lineas del lote de e-ARCIBA para un periodo, leidas de la base."""
-    propia = conn is None
-    conn = conn or conectar()
-    try:
-        filas = conn.execute(
-            "SELECT r.id, r.regimen, r.monto, r.alicuota, r.base_imponible, "
-            "       r.fecha_retencion, "
-            "       r.nro_certificado, c.id AS comprobante_id, c.tipo, c.letra, "
-            "       c.punto_venta, c.numero, c.numero_crudo, c.agrupa_varias, "
-            "       c.fecha AS fecha_comprobante, c.fecha_cruda, c.neto, "
-            "       p.cuit, p.razon_social, p.situacion_ib, p.situacion_iva, "
-            "       p.nro_inscripcion_ib "
-            "FROM retenciones r "
-            "JOIN comprobantes c ON c.id = r.comprobante_id "
-            "JOIN proveedores p ON p.cuit = c.cuit "
-            "WHERE r.impuesto = 'iibb_caba' AND r.periodo = ? "
-            "  AND r.estado = 'practicada' AND r.monto > 0 "
-            "ORDER BY r.fecha_retencion, r.id", (periodo,)).fetchall()
-    finally:
-        if propia:
-            conn.close()
+    filas = conn.execute(
+        "SELECT r.id, r.regimen, r.monto, r.alicuota, r.base_imponible, "
+        "       r.fecha_retencion, "
+        "       r.nro_certificado, c.id AS comprobante_id, c.tipo, c.letra, "
+        "       c.punto_venta, c.numero, c.numero_crudo, c.agrupa_varias, "
+        "       c.fecha AS fecha_comprobante, c.fecha_cruda, c.neto, "
+        "       p.cuit, p.razon_social, p.situacion_ib, p.situacion_iva, "
+        "       p.nro_inscripcion_ib "
+        "FROM retenciones r "
+        "JOIN comprobantes c ON c.id = r.comprobante_id "
+        "JOIN proveedores p ON p.cuit = c.cuit "
+        "WHERE r.impuesto = 'iibb_caba' AND r.periodo = ? "
+        "  AND r.estado = 'practicada' AND r.monto > 0 "
+        "ORDER BY r.fecha_retencion, r.id", (periodo,)).fetchall()
 
     maestros = cargar_proveedores(proveedores)
     lineas, avisos, derivados = [], [], []
@@ -228,26 +218,22 @@ def verificar(lineas):
     return errores
 
 
-def plantilla_proveedores(ruta):
+def plantilla_proveedores(ruta, conn):
     """Escribe el CSV de datos maestros con lo que se puede deducir y el resto vacio.
 
     El N de inscripcion en IIBB de los contribuyentes locales no esta en ningun lado
     del Excel y AGIP lo exige. Es un dato estable: se carga una vez por proveedor.
     """
-    conn = conectar()
-    try:
-        filas = [dict(x) for x in conn.execute(
-            "SELECT p.cuit, p.razon_social, "
-            "       COALESCE(p.situacion_ib, '') AS situacion_ib, "
-            "       COALESCE(p.nro_inscripcion_ib, '') AS nro_inscripcion_ib, "
-            "       COALESCE(p.situacion_iva, '') AS situacion_iva, "
-            "       COUNT(r.id) AS retenciones "
-            "FROM proveedores p "
-            "JOIN comprobantes c ON c.cuit = p.cuit "
-            "JOIN retenciones r ON r.comprobante_id = c.id AND r.impuesto = 'iibb_caba' "
-            "GROUP BY p.cuit ORDER BY retenciones DESC")]
-    finally:
-        conn.close()
+    filas = [dict(x) for x in conn.execute(
+        "SELECT p.cuit, p.razon_social, "
+        "       COALESCE(p.situacion_ib, '') AS situacion_ib, "
+        "       COALESCE(p.nro_inscripcion_ib, '') AS nro_inscripcion_ib, "
+        "       COALESCE(p.situacion_iva, '') AS situacion_iva, "
+        "       COUNT(r.id) AS retenciones "
+        "FROM proveedores p "
+        "JOIN comprobantes c ON c.cuit = p.cuit "
+        "JOIN retenciones r ON r.comprobante_id = c.id AND r.impuesto = 'iibb_caba' "
+        "GROUP BY p.cuit ORDER BY retenciones DESC")]
     for r in filas:
         # Convenio Multilateral: el numero de inscripcion es el propio CUIT
         if r["situacion_ib"] == "2" and not r["nro_inscripcion_ib"]:
@@ -279,16 +265,24 @@ def main():
                     help="alicuota de IVA para declarar el total como monto del "
                          "comprobante. Por defecto 0: se declara el neto, que es el "
                          "criterio de los certificados actuales de Fiberhome.")
+    clientes.agregar_argumento(ap)
     args = ap.parse_args()
+    cliente = clientes.del_argumento(args)
+    if "iibb_caba" not in cliente.agente_de():
+        raise SystemExit(f"{cliente.nombre} no es agente de retencion de IIBB CABA")
 
-    if args.plantilla:
-        plantilla_proveedores(args.proveedores)
-        return
-    if not args.periodo:
-        ap.error("falta el periodo (o usa --plantilla)")
-
-    lineas, avisos, derivados = generar(args.periodo, args.proveedores, args.iva)
-    salida = Path(args.salida or DIR / f"AGIP_{args.periodo.replace('-', '')}.txt")
+    conn = cliente.conectar()
+    try:
+        if args.plantilla:
+            plantilla_proveedores(args.proveedores, conn)
+            return
+        if not args.periodo:
+            ap.error("falta el periodo (o usa --plantilla)")
+        lineas, avisos, derivados = generar(args.periodo, args.proveedores, args.iva,
+                                            conn=conn)
+    finally:
+        conn.close()
+    salida = Path(args.salida or cliente.carpeta / f"AGIP_{args.periodo.replace('-', '')}.txt")
     salida.write_text("\r\n".join(lineas) + ("\r\n" if lineas else ""), encoding="utf-8")
 
     print(f"periodo {args.periodo}: {len(lineas)} lineas -> {salida.name}")

@@ -14,6 +14,7 @@ from pathlib import Path
 
 import calcular
 import certificados
+import clientes
 import leer_factura
 
 DIR = Path(__file__).resolve().parent
@@ -138,7 +139,11 @@ def main():
     ap.add_argument("--fecha-pago", help="fecha de la retencion (ISO). Por defecto, hoy")
     ap.add_argument("--confirmar", action="store_true",
                     help="guarda en la base y genera los PDF de los certificados")
+    clientes.agregar_argumento(ap)
     args = ap.parse_args()
+    cliente = clientes.del_argumento(args)
+    if args.confirmar and cliente.faltantes():
+        raise SystemExit(f"faltan datos de {cliente.nombre}: {', '.join(cliente.faltantes())}")
 
     f = leer_factura.leer(args.pdf)
     avisos_lectura = leer_factura.controles(f)
@@ -151,7 +156,7 @@ def main():
         print(f"          AVISO DE LECTURA: {a}")
     print()
 
-    conn = calcular.conectar()
+    conn = cliente.conectar()
     try:
         conn.execute("BEGIN")
         cambios, es_nuevo = sincronizar_proveedor(conn, f, args.confirmar)
@@ -179,7 +184,8 @@ def main():
                                     neto_gravado=f["importes"]["neto_gravado"],
                                     partidas=partidas or None, letra=f["letra"],
                                     sujeta_a_retencion=f["sujeta_a_retencion"],
-                                    iva_facturado=f["importes"]["iva"])
+                                    iva_facturado=f["importes"]["iva"],
+                                    agente_de=cliente.agente_de())
         calcular.imprimir(calculo)
 
         if not args.confirmar:
@@ -195,7 +201,8 @@ def main():
         print(f"Guardado. Comprobante #{cid}.")
         for _, nro in emitidos:
             filas = certificados.retenciones(conn, certificado=nro)
-            rutas, sin_dom = certificados.emitir(conn, filas)
+            rutas, sin_dom = certificados.emitir(conn, filas, cliente.certificados,
+                                                 agente=cliente.datos())
             for ruta in rutas:
                 print(f"   certificado {nro}  ->  {ruta.name}")
             for cuit, rs in sin_dom:

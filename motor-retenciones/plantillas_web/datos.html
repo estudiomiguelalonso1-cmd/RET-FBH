@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block titulo %}Datos — {{ cliente.nombre }}{% endblock %}
+{% block cuerpo %}
+
+<div class="titulo">
+  <h1>Datos del cliente</h1>
+  <p>Salen impresos en los certificados como agente de retención.</p>
+</div>
+
+{% if falta %}
+<div class="aviso"><span class="ico">!</span>
+  <span>Para emitir certificados falta: {{ falta | join(', ') }}.</span></div>
+{% endif %}
+
+<form method="post" class="panel" style="max-width:760px">
+  <div class="cuerpo apilado">
+    <div class="campos">
+      <div><label>Nombre corto</label>
+        <input name="nombre" value="{{ d.nombre or '' }}" required></div>
+      <div style="grid-column:span 2"><label>Razón social</label>
+        <input name="razon_social" value="{{ d.razon_social or '' }}"></div>
+    </div>
+    <div class="campos">
+      <div><label>CUIT</label>
+        <input name="cuit" value="{{ d.cuit or '' }}" inputmode="numeric" placeholder="11 dígitos"></div>
+    </div>
+    <div>
+      <label>Domicilio</label>
+      <input name="dom_default" value="{{ (d.domicilios or {}).default or '' }}">
+    </div>
+    <div class="campos" style="grid-template-columns:1fr 1fr">
+      <div><label>Domicilio en certificados de Ganancias (si es otro)</label>
+        <input name="dom_ganancias" value="{{ (d.domicilios or {}).ganancias or '' }}"></div>
+      <div><label>Domicilio en certificados de IIBB CABA (si es otro)</label>
+        <input name="dom_iibb_caba" value="{{ (d.domicilios or {}).iibb_caba or '' }}"></div>
+    </div>
+    <div>
+      <label>Es agente de retención de</label>
+      <div class="casillas">
+        {% for k, n in impuestos.items() %}
+        <label><input type="checkbox" name="agente_{{ k }}" value="1"
+               {{ 'checked' if k in agente }}> {{ n }}</label>
+        {% endfor %}
+      </div>
+    </div>
+    <div><button class="boton">Guardar</button></div>
+  </div>
+</form>
+
+{% endblock %}

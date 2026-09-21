@@ -19,7 +19,8 @@ from pathlib import Path
 from escala_anexo_viii import retencion_por_escala
 
 DIR = Path(__file__).resolve().parent
-DB = DIR / "retenciones.db"
+
+IMPUESTOS = ("ganancias", "iibb_caba", "iva", "suss")
 
 ALICUOTA_IVA_3164 = 0.105
 ALICUOTA_SUSS_1556 = 0.06
@@ -54,12 +55,7 @@ def redondear(v):
     return float(Decimal(str(v)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP))
 
 
-def conectar():
-    if not DB.exists():
-        raise SystemExit(f"falta {DB.name}: corre primero 'python migrar.py'")
-    conn = sqlite3.connect(DB)
-    conn.row_factory = sqlite3.Row
-    return conn
+
 
 
 # Como se deduce la jurisdiccion del domicilio que trae la factura.
@@ -296,7 +292,8 @@ def retencion_ganancias(conn, cuit, p, neto, cod_regimen, fecha, periodo, antes_
 
 def calcular(conn, cuit, neto, cod_regimen=None, fecha=None, antes_de=None,
              proveedor_provisorio=None, servicio_en_caba=False, neto_gravado=None,
-             partidas=None, letra=None, sujeta_a_retencion=False, iva_facturado=None):
+             partidas=None, letra=None, sujeta_a_retencion=False, iva_facturado=None,
+             agente_de=None):
     """Calcula las cuatro retenciones de un pago.
 
     `proveedor_provisorio` permite cotizar una factura de un proveedor que todavia
@@ -305,7 +302,11 @@ def calcular(conn, cuit, neto, cod_regimen=None, fecha=None, antes_de=None,
     `partidas` es [{'base': importe, 'regimen': codigo}, ...] cuando la factura
     tiene items de distinto regimen. Si no se pasa, se arma una sola partida con
     `neto` y `cod_regimen`.
+
+    `agente_de` es el set de impuestos que retiene el cliente ('ganancias',
+    'iibb_caba', 'iva', 'suss'). Si no se pasa, se calculan todos.
     """
+    agente_de = set(agente_de) if agente_de is not None else set(IMPUESTOS)
     fecha = fecha or date.today().isoformat()
     periodo = fecha[:7]
     p = proveedor(conn, cuit) or proveedor_provisorio
@@ -321,7 +322,8 @@ def calcular(conn, cuit, neto, cod_regimen=None, fecha=None, antes_de=None,
     # Una factura puede traer items de distinto regimen: se agrupan por codigo y
     # sale una retencion por cada uno, cada una con su propio minimo no imponible.
     especial = caso_rg1575(letra, sujeta_a_retencion)
-    for cod, base_regimen in sorted(agrupar_por_regimen(partidas).items()):
+    for cod, base_regimen in (sorted(agrupar_por_regimen(partidas).items())
+                              if "ganancias" in agente_de else []):
         linea = retencion_ganancias(conn, cuit, p, base_regimen, cod, fecha,
                                     periodo, antes_de)
         if isinstance(linea, str):
@@ -344,12 +346,16 @@ def calcular(conn, cuit, neto, cod_regimen=None, fecha=None, antes_de=None,
         resultado["retenciones"].append(linea)
 
     # --- IIBB CABA --------------------------------------------------------
-    # Fiberhome es de CABA: a los proveedores de CABA les corresponde retencion.
-    # A los de otra jurisdiccion, solo si el servicio se presto en CABA.
+    # Solo si el cliente es agente de recaudacion de AGIP. A los proveedores de
+    # CABA les corresponde retencion; a los de otra jurisdiccion, solo si el
+    # servicio se presto en CABA.
     jur = p["jurisdiccion"] if "jurisdiccion" in p.keys() else None
-    exc_iibb = exclusion(conn, cuit, "iibb_caba", fecha)
-    pad = alicuota_iibb(conn, cuit, fecha)
-    if jur and jur != "CABA" and not servicio_en_caba:
+    es_agente_iibb = "iibb_caba" in agente_de
+    exc_iibb = exclusion(conn, cuit, "iibb_caba", fecha) if es_agente_iibb else None
+    pad = alicuota_iibb(conn, cuit, fecha) if es_agente_iibb else None
+    if not es_agente_iibb:
+        pass
+    elif jur and jur != "CABA" and not servicio_en_caba:
         resultado["retenciones"].append({
             "impuesto": "IIBB CABA", "regimen": "29", "concepto": None,
             "base": redondear(neto), "alicuota": 0.0, "monto": 0.0,
@@ -395,7 +401,9 @@ def calcular(conn, cuit, neto, cod_regimen=None, fecha=None, antes_de=None,
             }})
 
     # --- IVA y SUSS -------------------------------------------------------
-    if especial and iva_facturado:
+    if "iva" not in agente_de:
+        pass
+    elif especial and iva_facturado:
         monto_1575 = redondear(iva_facturado * especial["iva"])
         resultado["retenciones"].append({
             "impuesto": "IVA", "regimen": "RG 1575", "concepto": especial["etiqueta"],
@@ -422,7 +430,7 @@ def calcular(conn, cuit, neto, cod_regimen=None, fecha=None, antes_de=None,
             "impuesto": "IVA", "regimen": "831", "concepto": "RG 3164",
             "base": redondear(base_iva), "alicuota": ALICUOTA_IVA_3164,
             "monto": monto_iva, "nota": nota_iva, "detalle": None})
-    if "retiene_suss_2682" in p.keys() and p["retiene_suss_2682"]:
+    if "suss" in agente_de and "retiene_suss_2682" in p.keys() and p["retiene_suss_2682"]:
         obra = (p["tipo_obra"] if "tipo_obra" in p.keys() else None) or "arquitectura"
         alic = ALICUOTA_SUSS_2682[obra]
         resultado["retenciones"].append({
@@ -431,7 +439,7 @@ def calcular(conn, cuit, neto, cod_regimen=None, fecha=None, antes_de=None,
             "monto": redondear(neto * alic),
             "nota": "se presenta por SIRE, no por SICORE",
             "detalle": f"obras de {obra}"})
-    if p["retiene_suss_1556"]:
+    if "suss" in agente_de and p["retiene_suss_1556"]:
         resultado["retenciones"].append({
             "impuesto": "SUSS", "regimen": "748", "concepto": "RG 1556",
             "base": redondear(neto), "alicuota": ALICUOTA_SUSS_1556,
@@ -544,16 +552,20 @@ def main():
     ap.add_argument("--fecha", help="fecha de pago (ISO). Por defecto, hoy")
     ap.add_argument("--verificar", action="store_true",
                     help="recalcula todo el historico y lo compara contra lo practicado")
+    import clientes
+    clientes.agregar_argumento(ap)
     args = ap.parse_args()
+    cliente = clientes.del_argumento(args)
 
-    conn = conectar()
+    conn = cliente.conectar()
     try:
         if args.verificar:
             verificar(conn)
             return
         if not (args.cuit and args.neto and args.regimen):
             ap.error("hacen falta --cuit, --neto y --regimen (o usa --verificar)")
-        imprimir(calcular(conn, args.cuit, args.neto, args.regimen, args.fecha))
+        imprimir(calcular(conn, args.cuit, args.neto, args.regimen, args.fecha,
+                          agente_de=cliente.agente_de()))
     finally:
         conn.close()
 

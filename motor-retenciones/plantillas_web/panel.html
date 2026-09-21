@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block titulo %}Clientes — Retenciones{% endblock %}
+{% block cuerpo %}
+
+<div class="titulo">
+  <h1>Clientes</h1>
+  <p>Elegí con qué cliente trabajar.</p>
+</div>
+
+<div class="clientes">
+  {% for x in filas %}
+  <a class="panel tarjeta-cliente" href="{{ url_for('bandeja', cliente=x.c.slug) }}">
+    <h2>{{ x.c.nombre }}</h2>
+    <div class="rs">{{ x.c.datos().razon_social or '' }}</div>
+    <div class="cifras">
+      <span><strong>{{ x.r.comprobantes }}</strong>comprobantes</span>
+      <span><strong>{{ x.r.retenciones }}</strong>retenciones</span>
+      {% if x.r.pendientes %}<span><strong>{{ x.r.pendientes }}</strong>pendientes</span>{% endif %}
+    </div>
+    <div class="chips">
+      {% if 'iibb_caba' in x.c.agente_de() %}<span class="chip acento">Agente IIBB CABA</span>{% endif %}
+      {% if x.falta %}<span class="chip alerta">Falta {{ x.falta | join(', ') }}</span>{% endif %}
+    </div>
+  </a>
+  {% endfor %}
+</div>
+
+<div class="panel" style="margin-top:20px; max-width:520px">
+  <div class="cab"><h2>Nuevo cliente</h2></div>
+  <div class="cuerpo">
+    <form method="post" action="{{ url_for('nuevo_cliente') }}" style="display:flex; gap:10px">
+      <input name="nombre" placeholder="Nombre" required>
+      <button class="boton">Crear</button>
+    </form>
+  </div>
+</div>
+
+{% endblock %}

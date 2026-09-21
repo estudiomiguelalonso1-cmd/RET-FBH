@@ -24,18 +24,18 @@ import openpyxl
 from openpyxl.styles import Alignment, Font
 from openpyxl.utils import get_column_letter
 
-from flask import (Flask, abort, redirect, render_template, request, send_file,
+from flask import (Flask, abort, g, redirect, render_template, request, send_file,
                    send_from_directory, url_for)
 
 import calcular
 import certificados
+import clientes
 import leer_factura
 import procesar
 
 DIR = Path(__file__).resolve().parent
-ENTRADA = DIR / "entrada"            # facturas subidas, todavia sin procesar
-PROCESADAS = DIR / "procesadas"      # las que ya se confirmaron
-SALIDA = DIR / "certificados"
+# Las carpetas y la base dependen del cliente con el que se esta trabajando: cada
+# ruta de cliente cuelga de /c/<cliente>/ y g.cliente apunta a su carpeta.
 
 app = Flask(__name__, template_folder=str(DIR / "plantillas_web"))
 app.config["MAX_CONTENT_LENGTH"] = 25 * 1024 * 1024
@@ -48,9 +48,7 @@ NOMBRE_IMPUESTO = {v: k for k, v in IMPUESTO_CLAVE.items()}
 
 
 def conectar():
-    conn = sqlite3.connect(DIR / "retenciones.db")
-    conn.row_factory = sqlite3.Row
-    return conn
+    return g.cliente.conectar()
 
 
 def buscar_pdf(nombre):
@@ -58,7 +56,7 @@ def buscar_pdf(nombre):
     nombre = Path(nombre or "").name
     if not nombre:
         return None
-    for carpeta in (ENTRADA, PROCESADAS):
+    for carpeta in (g.cliente.entrada, g.cliente.procesadas):
         if (carpeta / nombre).exists():
             return carpeta / nombre
     return None
@@ -230,6 +228,28 @@ def filtro_historial(args):
     return sql, params, {"q": q, "desde": desde, "hasta": hasta}
 
 
+@app.url_value_preprocessor
+def tomar_cliente(endpoint, values):
+    if values and "cliente" in values:
+        try:
+            g.cliente = clientes.obtener(values.pop("cliente"))
+        except KeyError:
+            abort(404)
+
+
+@app.url_defaults
+def completar_cliente(endpoint, values):
+    if "cliente" in values or not getattr(g, "cliente", None):
+        return
+    if app.url_map.is_endpoint_expecting(endpoint, "cliente"):
+        values["cliente"] = g.cliente.slug
+
+
+@app.context_processor
+def cliente_en_plantillas():
+    return {"cliente": getattr(g, "cliente", None)}
+
+
 def plata(v):
     return f"{v:,.2f}".replace(",", "\x00").replace(".", ",").replace("\x00", ".")
 
@@ -242,8 +262,44 @@ app.jinja_env.filters["plata"] = plata
 app.jinja_env.filters["impuesto"] = impuesto
 
 
-# ------------------------------------------------------------------ bandeja
+# ------------------------------------------------------------------ panel
 @app.route("/")
+def panel():
+    filas = [{"c": c, "r": c.resumen(), "falta": c.faltantes()} for c in clientes.listar()]
+    return render_template("panel.html", filas=filas)
+
+
+@app.route("/nuevo", methods=["POST"])
+def nuevo_cliente():
+    nombre = (request.form.get("nombre") or "").strip()
+    if not nombre or not clientes.slug_de(nombre):
+        return redirect(url_for("panel"))
+    c = clientes.crear(nombre)
+    return redirect(url_for("datos_cliente", cliente=c.slug))
+
+
+@app.route("/c/<cliente>/datos", methods=["GET", "POST"])
+def datos_cliente():
+    d = g.cliente.datos()
+    if request.method == "POST":
+        f = request.form
+        dom = {k: f.get(f"dom_{k}", "").strip() for k in ("default", "ganancias", "iibb_caba")}
+        d.update({
+            "nombre": f.get("nombre", "").strip() or d.get("nombre"),
+            "razon_social": f.get("razon_social", "").strip(),
+            "cuit": "".join(ch for ch in f.get("cuit", "") if ch.isdigit()),
+            "domicilios": dom,
+            "agente_de": {k: f.get(f"agente_{k}") == "1" for k in clientes.IMPUESTOS},
+        })
+        g.cliente.guardar_datos(d)
+        return redirect(url_for("bandeja"))
+    agente = g.cliente.agente_de()
+    return render_template("datos.html", d=d, agente=agente,
+                           impuestos=clientes.IMPUESTOS, falta=g.cliente.faltantes())
+
+
+# ------------------------------------------------------------------ bandeja
+@app.route("/c/<cliente>/")
 def bandeja():
     conn = conectar()
     try:
@@ -263,7 +319,7 @@ def bandeja():
             "SELECT punto_venta || '-' || numero FROM comprobantes "
             "WHERE punto_venta IS NOT NULL")}
         pendientes = []
-        for pdf in (sorted(ENTRADA.glob("*.pdf")) if ENTRADA.exists() else []):
+        for pdf in (sorted(g.cliente.entrada.glob("*.pdf")) if g.cliente.entrada.exists() else []):
             try:
                 d = leer_factura.leer(pdf)
                 clave = f"{d['punto_venta']}-{d['numero']}"
@@ -278,10 +334,15 @@ def bandeja():
                                    "ya_cargada": False})
 
         avisos = []
+        if g.cliente.faltantes():
+            avisos.append("Faltan datos del cliente para emitir certificados: "
+                          + ", ".join(g.cliente.faltantes()) + ".")
         ultimo = conn.execute(
             "SELECT MAX(vigencia_desde) FROM padron_iibb_caba").fetchone()[0]
         hoy = calcular.date.today().isoformat()
-        if not ultimo:
+        if "iibb_caba" not in g.cliente.agente_de():
+            pass
+        elif not ultimo:
             avisos.append("No hay ningún padrón de AGIP cargado. "
                           "Cargalo con: python padron_agip.py --descargar")
         elif calcular.meses_de_atraso(ultimo, hoy[:7]) >= 2:
@@ -294,31 +355,31 @@ def bandeja():
         conn.close()
 
 
-@app.route("/subir", methods=["POST"])
+@app.route("/c/<cliente>/subir", methods=["POST"])
 def subir():
     archivo = request.files.get("factura")
     if not archivo or not archivo.filename.lower().endswith(".pdf"):
         return redirect(url_for("bandeja"))
-    ENTRADA.mkdir(exist_ok=True)
+    g.cliente.entrada.mkdir(exist_ok=True)
     nombre = Path(archivo.filename).name
-    archivo.save(ENTRADA / nombre)
+    archivo.save(g.cliente.entrada / nombre)
     return redirect(url_for("revisar", nombre=nombre))
 
 
-@app.route("/descartar", methods=["POST"])
+@app.route("/c/<cliente>/descartar", methods=["POST"])
 def descartar():
     """Saca una factura de la bandeja sin procesarla.
 
     Solo borra el PDF de la carpeta de entrada. Si ya estaba confirmada, el
     comprobante y sus retenciones no se tocan: para eso esta anular.
     """
-    pdf = ENTRADA / Path(request.form.get("nombre", "")).name
-    if pdf.exists() and pdf.parent == ENTRADA:
+    pdf = g.cliente.entrada / Path(request.form.get("nombre", "")).name
+    if pdf.exists() and pdf.parent == g.cliente.entrada:
         pdf.unlink()
     return redirect(url_for("bandeja"))
 
 
-@app.route("/factura/<path:nombre>")
+@app.route("/c/<cliente>/factura/<path:nombre>")
 def factura_pdf(nombre):
     pdf = buscar_pdf(nombre)
     if pdf is None:
@@ -326,12 +387,12 @@ def factura_pdf(nombre):
     return send_from_directory(pdf.parent, pdf.name)
 
 
-@app.route("/certificado/<path:nombre>")
+@app.route("/c/<cliente>/certificado/<path:nombre>")
 def certificado_pdf(nombre):
-    return send_from_directory(SALIDA, nombre)
+    return send_from_directory(g.cliente.certificados, nombre)
 
 
-@app.route("/exportar")
+@app.route("/c/<cliente>/exportar")
 def exportar():
     """Baja el historial filtrado a un Excel, una fila por retencion."""
     conn = conectar()
@@ -391,7 +452,7 @@ def exportar():
 
 
 # ------------------------------------------------------------------ revisar
-@app.route("/revisar/<path:nombre>")
+@app.route("/c/<cliente>/revisar/<path:nombre>")
 def revisar(nombre):
     pdf = buscar_pdf(nombre)
     if pdf is None:
@@ -423,7 +484,7 @@ def revisar(nombre):
                 proveedor_provisorio=provisorio(f), servicio_en_caba=servicio_caba,
                 neto_gravado=f["importes"]["neto_gravado"], partidas=partidas or None,
                 letra=f["letra"], sujeta_a_retencion=f["sujeta_a_retencion"],
-                iva_facturado=f["importes"]["iva"])
+                iva_facturado=f["importes"]["iva"], agente_de=g.cliente.agente_de())
             calculo = aplicar_overrides(calculo, request.args)
             calculo = enlazar_facturas_previas(marcar_desactivados(calculo, apagados))
             errores, avisos_calculo = controles_del_calculo(calculo, neto)
@@ -446,7 +507,7 @@ def revisar(nombre):
         conn.close()
 
 
-@app.route("/confirmar", methods=["POST"])
+@app.route("/c/<cliente>/confirmar", methods=["POST"])
 def confirmar():
     nombre = request.form["nombre"]
     pdf = buscar_pdf(nombre)
@@ -460,6 +521,11 @@ def confirmar():
     apagados = desactivados_de(request.form)
     partidas = partidas_de(f, request.form, regimen)
 
+    if g.cliente.faltantes():
+        return render_template(
+            "error.html", nombre=nombre,
+            detalle="No se guardó nada: faltan datos del cliente ("
+                    + ", ".join(g.cliente.faltantes()) + "). Cargalos en Datos del cliente.")
     conn = conectar()
     try:
         conn.execute("BEGIN")
@@ -469,7 +535,7 @@ def confirmar():
             proveedor_provisorio=provisorio(f), servicio_en_caba=servicio_caba,
             neto_gravado=f["importes"]["neto_gravado"], partidas=partidas or None,
             letra=f["letra"], sujeta_a_retencion=f["sujeta_a_retencion"],
-            iva_facturado=f["importes"]["iva"])
+            iva_facturado=f["importes"]["iva"], agente_de=g.cliente.agente_de())
         calculo = marcar_desactivados(aplicar_overrides(calculo, request.form), apagados)
         errores, _ = controles_del_calculo(calculo, neto)
         if errores:
@@ -479,7 +545,8 @@ def confirmar():
                 detalle="No se guardó nada:\n\n  - " + "\n  - ".join(errores))
         cid, emitidos = procesar.guardar(conn, f, calculo, fecha_pago, servicio_caba)
         for _, nro in emitidos:
-            certificados.emitir(conn, certificados.retenciones(conn, certificado=nro))
+            certificados.emitir(conn, certificados.retenciones(conn, certificado=nro),
+                                destino=g.cliente.certificados, agente=g.cliente.datos())
         conn.commit()
     except Exception:
         conn.rollback()
@@ -489,14 +556,14 @@ def confirmar():
         conn.close()
 
     # con esto la factura deja de figurar como pendiente
-    PROCESADAS.mkdir(exist_ok=True)
-    if pdf.parent == ENTRADA:
-        shutil.move(str(pdf), str(PROCESADAS / pdf.name))
+    g.cliente.procesadas.mkdir(exist_ok=True)
+    if pdf.parent == g.cliente.entrada:
+        shutil.move(str(pdf), str(g.cliente.procesadas / pdf.name))
     return redirect(url_for("comprobante", cid=cid))
 
 
 # ------------------------------------------------------------- comprobante
-@app.route("/comprobante/<int:cid>")
+@app.route("/c/<cliente>/comprobante/<int:cid>")
 def comprobante(cid):
     conn = conectar()
     try:
@@ -510,11 +577,11 @@ def comprobante(cid):
             "SELECT * FROM retenciones WHERE comprobante_id = ? ORDER BY impuesto",
             (cid,)).fetchall()
         archivos = []
-        if SALIDA.exists():
+        if g.cliente.certificados.exists():
             for r in retenciones:
                 if r["nro_certificado"]:
                     marca = r["nro_certificado"].replace("/", "-")
-                    archivos += [p.name for p in sorted(SALIDA.glob(f"*_{marca}_*.pdf"))]
+                    archivos += [p.name for p in sorted(g.cliente.certificados.glob(f"*_{marca}_*.pdf"))]
         pdf = buscar_pdf(c["origen"] or "")
         return render_template("comprobante.html", c=c, retenciones=retenciones,
                                archivos=sorted(set(archivos)),
@@ -541,13 +608,13 @@ def es_el_ultimo_de_la_serie(conn, r):
 
 def borrar_certificados(nro):
     """Borra los PDF emitidos con ese numero de certificado."""
-    if not nro or not SALIDA.exists():
+    if not nro or not g.cliente.certificados.exists():
         return
-    for pdf in SALIDA.glob(f"*_{nro.replace('/', '-')}_*.pdf"):
+    for pdf in g.cliente.certificados.glob(f"*_{nro.replace('/', '-')}_*.pdf"):
         pdf.unlink(missing_ok=True)
 
 
-@app.route("/anular/<int:rid>", methods=["POST"])
+@app.route("/c/<cliente>/anular/<int:rid>", methods=["POST"])
 def anular(rid):
     """Anula una retencion ya practicada.
 
@@ -586,9 +653,9 @@ def anular(rid):
             conn.execute("DELETE FROM comprobantes WHERE id = ?", (cid,))
             conn.commit()
             pdf = buscar_pdf(origen or "")
-            if pdf is not None and pdf.parent == PROCESADAS:
-                ENTRADA.mkdir(exist_ok=True)
-                shutil.move(str(pdf), str(ENTRADA / pdf.name))
+            if pdf is not None and pdf.parent == g.cliente.procesadas:
+                g.cliente.entrada.mkdir(exist_ok=True)
+                shutil.move(str(pdf), str(g.cliente.entrada / pdf.name))
             return redirect(url_for("bandeja"))
         conn.commit()
     finally:
@@ -596,7 +663,7 @@ def anular(rid):
     return redirect(url_for("comprobante", cid=cid))
 
 
-@app.route("/reactivar/<int:rid>", methods=["POST"])
+@app.route("/c/<cliente>/reactivar/<int:rid>", methods=["POST"])
 def reactivar(rid):
     """Vuelve atras una anulacion hecha por error."""
     conn = conectar()
@@ -615,7 +682,5 @@ def reactivar(rid):
 
 
 if __name__ == "__main__":
-    ENTRADA.mkdir(exist_ok=True)
-    PROCESADAS.mkdir(exist_ok=True)
     print("Sistema de retenciones -> http://127.0.0.1:5000")
     app.run(host="127.0.0.1", port=5000, debug=False)

@@ -1,7 +1,12 @@
 # -*- coding: utf-8 -*-
-"""Migra el historico 2026 de los dos Excel a la base de datos.
+"""Migra el historico 2026 de los dos Excel de Fiberhome a su base de datos.
 
-    python migrar.py            crea retenciones.db desde cero y concilia
+    python migrar.py                        solo si la base no tiene nada cargado a mano
+    python migrar.py --forzar               la reconstruye igual (BORRA lo cargado por la app)
+
+Es una carga inicial, de una sola vez. Reconstruye la base desde cero, asi que si
+ya se procesaron facturas desde la aplicacion se niega a correr: esas facturas no
+estan en el Excel y se perderian.
 
 Lo que hace, en orden:
 
@@ -24,6 +29,7 @@ import json
 import sqlite3
 from pathlib import Path
 
+import clientes
 import motor_caba
 from escala_anexo_viii import UNIDAD_2026, tramos
 from exportar_agip import SITUACION_IVA
@@ -31,33 +37,31 @@ from exportar_sicore import fecha as fecha_ar, nro_comprobante
 
 DIR = Path(__file__).resolve().parent
 BASE = DIR.parent
-DB = DIR / "retenciones.db"
+CLIENTE = clientes.Cliente("fiberhome")     # el Excel historico es de Fiberhome
+DB = CLIENTE.db
 
 IMPUESTO_IVA_REGIMEN = "831"      # RG 3164
 IMPUESTO_SUSS_REGIMEN = "748"     # RG 1556
 
 
-def crear(conn):
-    conn.executescript((DIR / "esquema.sql").read_text(encoding="utf-8"))
+def cargados_desde_la_app(db):
+    """Comprobantes que no vienen del Excel: los que se perderian al reconstruir."""
+    if not db.exists():
+        return 0
+    conn = sqlite3.connect(db)
+    try:
+        return conn.execute("SELECT COUNT(*) FROM comprobantes "
+                            "WHERE origen IS NULL OR origen NOT LIKE 'Excel%'").fetchone()[0]
+    except sqlite3.OperationalError:
+        return 0
+    finally:
+        conn.close()
 
 
 # --------------------------------------------------------------- normativas
 def cargar_normativas(conn, H):
-    afip = json.loads((BASE / "diseno-sistema-retenciones" /
-                       "regimenes_ganancias_afip.json").read_text(encoding="utf-8"))
-    conn.executemany(
-        "INSERT INTO regimenes_ganancias (id_alicuota, cod_regimen, situacion, "
-        "tipo_persona, concepto, anexo, alicuota, monto_no_sujeto, monto_minimo, "
-        "sincronizado) VALUES (?,?,?,?,?,?,?,?,?,?)",
-        [(r["ID_ALICUOTA"], r["COD_REGIMEN"], r["SITUACION"], r["TIPO_PERSONA"] or "",
-          r["CONCEPTO"],
-          r["ANEXO"], r["PORCENT_A_RETENER"] / 100, r["MONTO_NO_SUJETO"],
-          r["MONTO_MINIMO"], afip["fecha_descarga"]) for r in afip["regimenes"]])
-
-    conn.executemany(
-        "INSERT INTO escala_ganancias (vigencia_desde, desde, monto_fijo, alicuota) "
-        "VALUES (?,?,?,?)",
-        [("2026-01-01", desde, fijo, tasa) for desde, fijo, tasa in tramos(UNIDAD_2026)])
+    clientes.inicializar_base(conn)
+    n_reg = conn.execute("SELECT COUNT(*) FROM regimenes_ganancias").fetchone()[0]
 
     # El padron se reconstruye desde los renglones que el Excel de CABA pega en la
     # columna M: es la unica copia del padron de AGIP que hay en la carpeta.
@@ -76,7 +80,7 @@ def cargar_normativas(conn, H):
         "INSERT INTO padron_iibb_caba (cuit, vigencia_desde, vigencia_hasta, "
         "publicacion, tipo_contr, alic_percepcion, alic_retencion, razon_social, "
         "renglon) VALUES (?,?,?,?,?,?,?,?,?)", list(vistos.values()))
-    return len(afip["regimenes"]), len(vistos)
+    return n_reg, len(vistos)
 
 
 # -------------------------------------------------------------- proveedores
@@ -245,12 +249,24 @@ def conciliar(conn, H):
 
 
 def main():
+    import argparse
+    ap = argparse.ArgumentParser(description="Carga inicial del historico de Fiberhome")
+    ap.add_argument("--forzar", action="store_true",
+                    help="reconstruir aunque haya facturas cargadas desde la app")
+    args = ap.parse_args()
+
+    a_mano = cargados_desde_la_app(DB)
+    if a_mano and not args.forzar:
+        raise SystemExit(
+            f"La base de {CLIENTE.nombre} tiene {a_mano} comprobante(s) cargados desde la "
+            f"aplicacion, que no estan en el Excel.\nReconstruirla los borraria. "
+            f"No se hizo nada.\n(Si de verdad queres reconstruirla: --forzar)")
+    DB.parent.mkdir(parents=True, exist_ok=True)
     if DB.exists():
         DB.unlink()
     H = json.loads((DIR / "historico.json").read_text(encoding="utf-8"))
     conn = sqlite3.connect(DB)
     try:
-        crear(conn)
         n_reg, n_pad = cargar_normativas(conn, H)
         n_prov = cargar_proveedores(conn, H)
         n_comp, sin_par = cargar_operaciones(conn, H)

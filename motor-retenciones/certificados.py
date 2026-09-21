@@ -9,7 +9,7 @@ certificados originales, asi que el resultado es visualmente el mismo.
     python certificados.py --periodo 2026-08
     python certificados.py --periodo 2026-08 --impuesto iibb_caba
 
-Los datos del agente de retencion salen de agente.json. El domicilio del proveedor
+Los datos del agente de retencion salen del cliente.json de cada cliente. El domicilio del proveedor
 sale de la base; si falta, el certificado se genera igual pero se avisa.
 """
 import argparse
@@ -17,13 +17,13 @@ import json
 import sqlite3
 from pathlib import Path
 
+import clientes
+
 import pymupdf
 from jinja2 import Template
 
 DIR = Path(__file__).resolve().parent
 PLANTILLAS = DIR / "plantillas"
-SALIDA = DIR / "certificados"
-DB = DIR / "retenciones.db"
 
 # que plantilla y que titulo usa cada impuesto
 IMPUESTOS = {
@@ -61,19 +61,7 @@ def cuit_con_guiones(c):
     return f"{c[:2]}-{c[2:10]}-{c[10:]}" if c and len(c) == 11 else c
 
 
-def conectar():
-    if not DB.exists():
-        raise SystemExit(f"falta {DB.name}: corre primero 'python migrar.py'")
-    conn = sqlite3.connect(DB)
-    conn.row_factory = sqlite3.Row
-    return conn
 
-
-def cargar_agente():
-    ruta = DIR / "agente.json"
-    if not ruta.exists():
-        raise SystemExit("falta agente.json con los datos del agente de retencion")
-    return json.loads(ruta.read_text(encoding="utf-8"))
 
 
 def contexto(r, agente, impuesto):
@@ -145,10 +133,13 @@ def retenciones(conn, periodo=None, certificado=None, impuesto=None):
     return conn.execute(sql + " GROUP BY rc.id ORDER BY rc.fecha_retencion, rc.id", args).fetchall()
 
 
-def emitir(conn, filas, destino=None, agente=None):
-    """Genera los PDF de esas retenciones. Devuelve (rutas, proveedores_sin_domicilio)."""
-    agente = agente or cargar_agente()
-    destino = Path(destino or SALIDA)
+def emitir(conn, filas, destino, agente):
+    """Genera los PDF de esas retenciones. Devuelve (rutas, proveedores_sin_domicilio).
+
+    `destino` es la carpeta de certificados del cliente y `agente` sus datos
+    (cliente.json): razon social, CUIT y domicilios del agente de retencion.
+    """
+    destino = Path(destino)
     destino.mkdir(parents=True, exist_ok=True)
     rutas, sin_domicilio = [], set()
     for r in filas:
@@ -168,15 +159,18 @@ def main():
     ap.add_argument("--periodo", help="AAAA-MM")
     ap.add_argument("--certificado", help="un certificado puntual, por su numero")
     ap.add_argument("--impuesto", choices=("ganancias", "iibb_caba"))
-    ap.add_argument("--salida", default=str(SALIDA))
+    ap.add_argument("--salida", help="carpeta (por defecto, la del cliente)")
+    clientes.agregar_argumento(ap)
     args = ap.parse_args()
+    cliente = clientes.del_argumento(args)
+    args.salida = args.salida or str(cliente.certificados)
     if not (args.periodo or args.certificado):
         ap.error("indica --periodo o --certificado")
 
-    conn = conectar()
+    conn = cliente.conectar()
     try:
         filas = retenciones(conn, args.periodo, args.certificado, args.impuesto)
-        rutas, sin_domicilio = emitir(conn, filas, args.salida)
+        rutas, sin_domicilio = emitir(conn, filas, args.salida, agente=cliente.datos())
         print(f"{len(rutas)} certificados -> {Path(args.salida).name}/")
         if sin_domicilio:
             print(f"\n{len(sin_domicilio)} proveedores sin domicilio cargado "

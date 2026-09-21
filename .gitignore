@@ -7,6 +7,9 @@
 *.xls
 *.pdf
 
+# datos de cada cliente: ficha, base, facturas y certificados
+motor-retenciones/clientes/
+
 # datos extraídos y base de datos
 motor-retenciones/historico.json
 motor-retenciones/retenciones.db

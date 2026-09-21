@@ -1,4 +1,4 @@
-# Sistema de retenciones — Fiberhome Argentina S.A.
+# Sistema de retenciones
 
 Fiberhome actúa como agente de retención de cuatro impuestos cada vez que le paga una
 factura a un proveedor. Hoy el circuito es manual: alguien decide a mano el régimen y
@@ -49,6 +49,23 @@ comprobante y se emiten los certificados.
 
 Corre sólo en `127.0.0.1`: es una herramienta de escritorio, no un servidor expuesto.
 
+### Varios clientes
+
+La pantalla inicial lista los clientes del estudio. Cada uno es un agente de retención
+distinto y vive en su propia carpeta, con su propia base:
+
+```
+clientes/<cliente>/
+  cliente.json      razón social, CUIT, domicilios y de qué impuestos es agente
+  retenciones.db    sus proveedores, comprobantes y retenciones
+  entrada/  procesadas/  certificados/
+```
+
+Una base por cliente hace imposible que una consulta mezcle datos de dos clientes.
+En *Datos del cliente* se cargan la razón social, el CUIT y el domicilio (sin eso no
+se emiten certificados) y los impuestos que retiene: IIBB CABA sólo se calcula para
+los clientes inscriptos como agentes de AGIP.
+
 ### Por línea de comandos
 
 ```bash
@@ -56,11 +73,14 @@ cd motor-retenciones
 
 python extraer_historico.py       # lee los dos Excel -> historico.json
 python validar.py                 # corre el motor y compara contra lo practicado
-python migrar.py                  # carga el histórico en retenciones.db y concilia
+python migrar.py                  # carga el histórico de Fiberhome y concilia
 
-python exportar_sicore.py 2026-08            # archivo de importación a SICORE
-python exportar_agip.py --plantilla          # datos maestros de proveedores
-python exportar_agip.py 2026-08              # archivo de importación a e-ARCIBA
+python clientes.py --listar                                # clientes y qué les falta
+python clientes.py --crear "Nombre"                        # alta de un cliente
+python exportar_sicore.py 2026-08 --cliente fiberhome      # importación a SICORE
+python exportar_agip.py --plantilla --cliente fiberhome    # datos maestros de proveedores
+python exportar_agip.py 2026-08 --cliente fiberhome        # importación a e-ARCIBA
+python padron_agip.py --descargar     # padrón del mes, para los agentes de IIBB
 ```
 
 ## Qué hay en cada archivo
@@ -77,6 +97,7 @@ python exportar_agip.py 2026-08              # archivo de importación a e-ARCIB
 | `exportar_agip.py` | Archivo de 226 caracteres para el e-ARCIBA |
 | `esquema.sql` | Modelo de datos (SQLite, portable a PostgreSQL) |
 | `migrar.py` | Carga el histórico 2026 en la base y concilia contra el Excel |
+| `clientes.py` | Clientes del estudio: una carpeta y una base por cliente |
 | `leer_factura.py` | Lee una factura electrónica de AFIP: emisor, importes, domicilio y N° de IIBB |
 | `calcular.py` | Calcula las retenciones de una factura nueva, mirando el acumulado del mes |
 | `certificados.py` | Emite los certificados en PDF, con el layout de ARCA y de AGIP |
