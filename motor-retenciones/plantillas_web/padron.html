@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+{% block titulo %}Padrón AGIP — Retenciones{% endblock %}
+{% block cuerpo %}
+
+<div class="titulo">
+  <div>
+    <h1>Padrón AGIP</h1>
+    <p>Padrón de Regímenes Generales. Se usa para la alícuota de IIBB CABA y se actualiza una vez por mes.</p>
+  </div>
+</div>
+
+{% if ok %}<div class="aviso info"><span class="ico">✓</span><span>{{ ok }}</span></div>{% endif %}
+{% if error %}<div class="aviso malo"><span class="ico">!</span><span>{{ error }}</span></div>{% endif %}
+
+{% set ultimo = e.cache[0][0] if e.cache else None %}
+{% if not ultimo %}
+<div class="aviso"><span class="ico">!</span><span>No hay ningún padrón cargado.</span></div>
+{% elif ultimo < e.mes %}
+<div class="aviso"><span class="ico">!</span><span>El padrón más nuevo es de {{ ultimo }}. Falta el de {{ e.mes }}.</span></div>
+{% endif %}
+
+<div class="doble">
+  <div class="panel">
+    <div class="cab"><h2>Bajar de AGIP</h2></div>
+    <div class="cuerpo">
+      <p style="margin:0 0 14px">Baja el último padrón publicado y lo carga para los clientes agentes de IIBB.</p>
+      <form method="post" action="{{ url_for('padron_descargar') }}" onsubmit="ocupado(this, 'Bajando… puede tardar un minuto')">
+        <button class="boton">Bajar el último padrón</button>
+      </form>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="cab"><h2>Importar a mano</h2></div>
+    <div class="cuerpo">
+      <form method="post" action="{{ url_for('padron_importar') }}" enctype="multipart/form-data"
+            onsubmit="ocupado(this, 'Importando… puede tardar un minuto')">
+        <label class="soltar" id="zona">
+          <input type="file" name="archivo" accept=".rar,.txt" required
+                 onchange="document.getElementById('elegido').textContent = this.files[0] ? this.files[0].name : 'Elegir archivo .rar o .txt'">
+          <div class="grande" id="elegido">Elegir archivo .rar o .txt</div>
+          <div class="nota">El archivo "Padrón de Regímenes Generales" tal como lo baja la página de AGIP.</div>
+        </label>
+        <p style="margin:14px 0 0"><button class="boton">Importar</button></p>
+      </form>
+    </div>
+  </div>
+</div>
+
+<div class="doble" style="margin-top:20px">
+  <div class="panel">
+    <div class="cab"><h2>Padrones bajados</h2></div>
+    {% if e.cache %}
+    <table class="compacta">
+      <thead><tr><th>Vigencia</th><th>Archivo</th></tr></thead>
+      <tbody>
+        {% for periodo, ruta in e.cache %}
+        <tr><td>{{ periodo }}{% if loop.first %} <span class="chip ok">el más nuevo</span>{% endif %}</td>
+            <td>{{ ruta.name }}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}<div class="vacio">Todavía no hay ninguno.</div>{% endif %}
+  </div>
+
+  <div class="panel">
+    <div class="cab"><h2>Cargado por cliente</h2></div>
+    {% if e.agentes %}
+    <table class="compacta">
+      <thead><tr><th>Cliente</th><th>Vigencia</th><th class="num">Proveedores</th></tr></thead>
+      <tbody>
+        {% for a in e.agentes %}
+        <tr><td>{{ a.nombre }}</td><td>{{ (a.vigencia or '—')[:7] }}</td><td class="num">{{ a.cuits }}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}<div class="vacio">Ningún cliente es agente de IIBB CABA.</div>{% endif %}
+  </div>
+</div>
+
+<script>
+function ocupado(form, texto) {
+  const b = form.querySelector('button');
+  b.disabled = true; b.textContent = texto;
+}
+</script>
+
+{% endblock %}

@@ -31,6 +31,7 @@ import calcular
 import certificados
 import clientes
 import leer_factura
+import padron_agip
 import procesar
 
 DIR = Path(__file__).resolve().parent
@@ -38,7 +39,8 @@ DIR = Path(__file__).resolve().parent
 # ruta de cliente cuelga de /c/<cliente>/ y g.cliente apunta a su carpeta.
 
 app = Flask(__name__, template_folder=str(DIR / "plantillas_web"))
-app.config["MAX_CONTENT_LENGTH"] = 25 * 1024 * 1024
+# el padron de AGIP descomprimido pesa unos 135 MB
+app.config["MAX_CONTENT_LENGTH"] = 250 * 1024 * 1024
 
 # Clave estable de cada linea del calculo, para poder apagarla desde la pantalla.
 IMPUESTO_CLAVE = {"Ganancias": "ganancias", "IIBB CABA": "iibb_caba",
@@ -272,6 +274,65 @@ def panel():
     return render_template("panel.html", activos=activos, archivados=archivados)
 
 
+# ------------------------------------------------------------------ padron AGIP
+def estado_padron():
+    agentes = []
+    for c in clientes.listar():
+        if "iibb_caba" not in c.agente_de():
+            continue
+        conn = c.conectar()
+        try:
+            f = conn.execute("SELECT MAX(vigencia_desde), COUNT(DISTINCT cuit) "
+                             "FROM padron_iibb_caba").fetchone()
+        finally:
+            conn.close()
+        agentes.append({"nombre": c.nombre, "vigencia": f[0], "cuits": f[1]})
+    return {"cache": padron_agip.en_cache(), "agentes": agentes,
+            "mes": calcular.date.today().isoformat()[:7]}
+
+
+@app.route("/padron")
+def padron():
+    return render_template("padron.html", e=estado_padron(),
+                           ok=request.args.get("ok"), error=request.args.get("error"))
+
+
+def resultado_carga(periodo, txt):
+    cargas = padron_agip.cargar_en_clientes(txt)
+    detalle = ", ".join(f"{c.nombre}: {n} proveedores" for c, _, n in cargas)
+    return redirect(url_for("padron", ok=f"Padrón {periodo} cargado. {detalle}".strip()))
+
+
+@app.route("/padron/descargar", methods=["POST"])
+def padron_descargar():
+    try:
+        rar = padron_agip.descargar()
+        txt = padron_agip.extraer(rar)
+        return resultado_carga(padron_agip.periodo_de(txt), txt)
+    except (Exception, SystemExit) as e:
+        return redirect(url_for("padron", error=f"No se pudo bajar de AGIP: {e}"))
+
+
+@app.route("/padron/importar", methods=["POST"])
+def padron_importar():
+    archivo = request.files.get("archivo")
+    if not archivo or not archivo.filename:
+        return redirect(url_for("padron", error="Elegí un archivo .rar o .txt."))
+    extension = Path(archivo.filename).suffix.lower()
+    if extension not in (".rar", ".txt"):
+        return redirect(url_for("padron", error="El archivo tiene que ser .rar o .txt."))
+    padron_agip.CACHE.mkdir(exist_ok=True)
+    subido = padron_agip.CACHE / ("_subido" + extension)
+    archivo.save(subido)
+    try:
+        periodo, txt = padron_agip.importar(subido)
+        return resultado_carga(periodo, txt)
+    except (Exception, SystemExit) as e:
+        return redirect(url_for("padron", error=f"No se pudo importar: {e}"))
+    finally:
+        subido.unlink(missing_ok=True)
+
+
 @app.route("/c/<cliente>/archivar", methods=["POST"])
 def archivar_cliente():
     g.cliente.archivar(True)
@@ -359,10 +420,10 @@ def bandeja():
             pass
         elif not ultimo:
             avisos.append("No hay ningún padrón de AGIP cargado. "
-                          "Cargalo con: python padron_agip.py --descargar")
+                          "Cargalo desde el menú Padrón AGIP.")
         elif calcular.meses_de_atraso(ultimo, hoy[:7]) >= 1:
             avisos.append(f"El padrón de AGIP más nuevo es de {ultimo[:7]}. "
-                          f"Actualizalo con: python padron_agip.py --descargar")
+                          f"Actualizalo desde el menú Padrón AGIP.")
         return render_template("bandeja.html", recientes=recientes, filtro=filtro,
                                total_filtrado=total_filtrado,
                                pendientes=pendientes, avisos=avisos)

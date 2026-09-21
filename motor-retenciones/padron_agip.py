@@ -142,6 +142,81 @@ def cargar(txt, conn, todos=False):
     return leidos, len(filas)
 
 
+def periodo_de(txt):
+    """'2026-09' leyendo la vigencia del primer renglon valido del TXT."""
+    for p in renglones(txt):
+        d = p[1]
+        if len(d) == 8 and d.isdigit():
+            return f"{d[4:8]}-{d[2:4]}"
+        break
+    raise ValueError("el archivo no tiene el formato del Padron de Regimenes Generales")
+
+
+def importar(archivo):
+    """Incorpora un padron bajado a mano (.rar o .txt) al cache.
+
+    El archivo puede venir con cualquier nombre: se lee la vigencia del contenido
+    y se lo guarda como ARDJU008MMAAAA.TXT, que es lo que espera el resto.
+    Devuelve (periodo, ruta_del_txt).
+    """
+    archivo = Path(archivo)
+    CACHE.mkdir(exist_ok=True)
+    tmp = CACHE / "_importando"
+    shutil.rmtree(tmp, ignore_errors=True)
+    tmp.mkdir()
+    try:
+        if archivo.suffix.lower() == ".rar":
+            if not TAR.exists():
+                raise ValueError("no encuentro tar.exe para descomprimir el .rar")
+            r = subprocess.run([str(TAR), "-xf", str(archivo.resolve())], cwd=tmp,
+                               capture_output=True)
+            if r.returncode != 0:
+                raise ValueError("no se pudo descomprimir el .rar")
+            txts = [t for t in tmp.rglob("*") if t.suffix.lower() == ".txt"]
+            if not txts:
+                raise ValueError("el .rar no contiene ningun .txt")
+            txt = max(txts, key=lambda t: t.stat().st_size)
+        elif archivo.suffix.lower() == ".txt":
+            txt = archivo
+        else:
+            raise ValueError("el archivo tiene que ser .rar o .txt")
+        periodo = periodo_de(txt)
+        destino = CACHE / f"ARDJU008{periodo[5:7]}{periodo[:4]}.TXT"
+        if txt.resolve() != destino.resolve():
+            shutil.move(str(txt), str(destino))
+        return periodo, destino
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
+def cargar_en_clientes(txt, todos=False):
+    """Carga el padron en la base de cada cliente agente de IIBB CABA.
+
+    Devuelve [(cliente, renglones_leidos, cargados), ...].
+    """
+    out = []
+    for cliente in clientes.listar():
+        if "iibb_caba" not in cliente.agente_de():
+            continue
+        conn = cliente.conectar()
+        try:
+            leidos, cargados = cargar(txt, conn, todos)
+        finally:
+            conn.close()
+        out.append((cliente, leidos, cargados))
+    return out
+
+
+def en_cache():
+    """[(periodo, ruta_txt)] de los padrones ya bajados, del mas nuevo al mas viejo."""
+    out = []
+    for t in CACHE.glob("*.TXT") if CACHE.exists() else []:
+        m = re.fullmatch(r"ARDJU\d{3}(\d{2})(\d{4})", t.stem)
+        if m:
+            out.append((f"{m.group(2)}-{m.group(1)}", t))
+    return sorted(out, reverse=True)
+
+
 def buscar(txt, cuit):
     for p in renglones(txt):
         if p[3] == cuit:
@@ -172,7 +247,7 @@ def main():
     if archivo is None:
         ap.error("indica --descargar, --cargar, --listar o --buscar")
 
-    txt = extraer(archivo)
+    txt = extraer(archivo) if args.descargar is not None else importar(archivo)[1]
     print(f"padron: {txt.name}  ({txt.stat().st_size / 1e6:.0f} MB)")
 
     if args.buscar:
@@ -186,17 +261,12 @@ def main():
             print(f"   alicuota retencion {p[8]} %   percepcion {p[7]} %")
         return
 
-    agentes = [c for c in clientes.listar() if "iibb_caba" in c.agente_de()]
-    if not agentes:
+    cargas = cargar_en_clientes(txt, args.todos)
+    if not cargas:
         print("ningun cliente es agente de IIBB CABA: no se carga en ninguna base")
-    for cliente in agentes:
-        conn = cliente.conectar()
-        try:
-            leidos, cargados = cargar(txt, conn, args.todos)
-            print(f"{cliente.nombre}: {leidos:,} renglones leidos, {cargados:,} cargados"
-                  f"{'' if args.todos else ' (solo proveedores conocidos)'}")
-        finally:
-            conn.close()
+    for cliente, leidos, cargados in cargas:
+        print(f"{cliente.nombre}: {leidos:,} renglones leidos, {cargados:,} cargados"
+              f"{'' if args.todos else ' (solo proveedores conocidos)'}")
 
 
 if __name__ == "__main__":
