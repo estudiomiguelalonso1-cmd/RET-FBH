@@ -176,13 +176,21 @@ def alicuota_iibb(conn, cuit, fecha):
     cacheado y se lo incorpora: es el caso de un proveedor nuevo.
     """
     fila = _consultar(conn, cuit, fecha)
-    if fila is not None:
+    if fila is not None and fila["vigencia_desde"][:7] >= fecha[:7]:
         return fila
     try:
         import padron_agip
     except ImportError:
-        return None
-    for txt in sorted(padron_agip.CACHE.glob("*.TXT"), reverse=True):
+        return fila
+    # ARDJU008MMAAAA: se ordena por anio y mes, no por el nombre tal cual
+    def periodo_del_archivo(t):
+        return t.stem[-4:] + t.stem[-6:-4]
+    for txt in sorted(padron_agip.CACHE.glob("*.TXT"), key=periodo_del_archivo,
+                      reverse=True):
+        if periodo_del_archivo(txt) > fecha[:4] + fecha[5:7]:
+            continue       # un padron posterior al pago no rige para ese pago
+        if fila is not None and periodo_del_archivo(txt) <=                 fila["vigencia_desde"][:4] + fila["vigencia_desde"][5:7]:
+            break          # ya esta en la base lo mas nuevo que hay
         p = padron_agip.buscar(txt, cuit)
         if not p:
             continue
@@ -196,7 +204,7 @@ def alicuota_iibb(conn, cuit, fecha):
              ";".join(p).strip()))
         conn.commit()
         return _consultar(conn, cuit, fecha)
-    return None
+    return fila
 
 
 def agrupar_por_regimen(partidas):
@@ -374,9 +382,8 @@ def calcular(conn, cuit, neto, cod_regimen=None, fecha=None, antes_de=None,
                                    "hay que bajar el padron del mes")
     else:
         alic = pad["alic_retencion"]
-        # AGIP publica el padron con un mes de atraso, asi que usar el del mes
-        # anterior es lo normal y no amerita aviso. Solo se avisa si quedo mas
-        # atras que eso, que ahi si es que falta actualizarlo.
+        # AGIP publica el padron del mes antes de que empiece: si el que rige
+        # es de un mes anterior al pago, falta bajar el nuevo.
         atraso = meses_de_atraso(pad["vigencia_desde"], periodo)
         detalle = f"padron de {pad['vigencia_desde'][:7]}"
         # se adjunta el renglon del padron para poder verificar la alicuota
@@ -386,8 +393,8 @@ def calcular(conn, cuit, neto, cod_regimen=None, fecha=None, antes_de=None,
             "base": redondear(neto), "alicuota": alic,
             "monto": redondear(neto * alic),
             "nota": (f"el padron mas nuevo es de {pad['vigencia_desde'][:7]}, "
-                     f"{atraso} meses atras: conviene actualizarlo"
-                     if atraso >= 2 else None),
+                     f"no el del mes del pago: hay que bajar el padron nuevo"
+                     if atraso >= 1 else None),
             "detalle": detalle,
             "padron": {
                 "renglon": pad["renglon"] if "renglon" in claves else None,

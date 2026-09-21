@@ -38,8 +38,12 @@ DIR = Path(__file__).resolve().parent
 CACHE = DIR / "padrones"
 
 API = "https://www.agip.gob.ar/api/pages/byPath"
-PAGINA = ("/agentes/agentes-de-recaudacion/ib-agentes-recaudacion/padrones/"
-          "Padr\u00f3n-de-Reg\u00edmenes-Generales")
+# El padron vigente se publica en la pagina de agentes de recaudacion. La pagina
+# "Historico" lista los meses anteriores y no incluye el vigente: de ahi se bajaba
+# antes, y por eso parecia que AGIP publicaba con un mes de atraso.
+PAGINAS = ("/agentes/agentes-de-recaudacion-e-informacion",
+           "/agentes/agentes-de-recaudacion/ib-agentes-recaudacion/padrones/"
+           "Padr\u00f3n-de-Reg\u00edmenes-Generales")
 TAR = Path(r"C:\Windows\System32\tar.exe")
 
 MESES = {1: "enero", 2: "febrero", 3: "marzo", 4: "abril", 5: "mayo", 6: "junio",
@@ -48,16 +52,19 @@ MESES = {1: "enero", 2: "febrero", 3: "marzo", 4: "abril", 5: "mayo", 6: "junio"
 
 
 def publicados():
-    """{'2026-08': url, ...} leyendo la pagina de AGIP."""
-    req = urllib.request.Request(
-        API, data=json.dumps({"path": PAGINA}).encode("utf-8"),
-        headers={"Content-Type": "application/json", "User-Agent": "Mozilla/5.0"})
-    pagina = json.loads(urllib.request.urlopen(req, timeout=60).read().decode("utf-8"))
-    html = pagina.get("content", "")
+    """{'2026-09': url, ...} leyendo las paginas de AGIP (vigente e historico)."""
     out = {}
-    for url, mm, aaaa in re.findall(
-            r'(https?://[^"\'\s<>]*?ARDJU\d{3}(\d{2})(\d{4})\.rar)', html):
-        out[f"{aaaa}-{mm}"] = url
+    for pagina in PAGINAS:
+        req = urllib.request.Request(
+            API, data=json.dumps({"path": pagina}).encode("utf-8"),
+            headers={"Content-Type": "application/json", "User-Agent": "Mozilla/5.0"})
+        # los enlaces pueden venir en cualquier campo del JSON: se busca en todo
+        texto = json.dumps(json.loads(
+            urllib.request.urlopen(req, timeout=60).read().decode("utf-8")),
+            ensure_ascii=False)
+        for url, mm, aaaa in re.findall(
+                r'(https?://[^"\'\s<>\\]*?ARDJU\d{3}(\d{2})(\d{4})\.rar)', texto):
+            out.setdefault(f"{aaaa}-{mm}", url.replace(" ", "%20"))
     return dict(sorted(out.items(), reverse=True))
 
 

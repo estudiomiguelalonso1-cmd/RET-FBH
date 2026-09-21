@@ -360,7 +360,7 @@ def bandeja():
         elif not ultimo:
             avisos.append("No hay ningún padrón de AGIP cargado. "
                           "Cargalo con: python padron_agip.py --descargar")
-        elif calcular.meses_de_atraso(ultimo, hoy[:7]) >= 2:
+        elif calcular.meses_de_atraso(ultimo, hoy[:7]) >= 1:
             avisos.append(f"El padrón de AGIP más nuevo es de {ultimo[:7]}. "
                           f"Actualizalo con: python padron_agip.py --descargar")
         return render_template("bandeja.html", recientes=recientes, filtro=filtro,
